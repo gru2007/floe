@@ -1,0 +1,84 @@
+;; Floe memepad — shared constants
+
+const ONE_TON = 1000000000;
+const MY_WORKCHAIN = 0;
+
+;; ---------- TEP-74 / TEP-89 ----------
+const op::transfer = 0xf8a7ea5;
+const op::transfer_notification = 0x7362d09c;
+const op::internal_transfer = 0x178d4519;
+const op::excesses = 0xd53276db;
+const op::burn = 0x595f07bc;
+const op::burn_notification = 0x7bdd97de;
+const op::provide_wallet_address = 0x2c76b973;
+const op::take_wallet_address = 0xd1735400;
+const op::top_up = 0xd372158c;
+
+;; ---------- factory ----------
+const op::create_token = 0x0c7e2a31;   ;; user -> factory
+const op::set_config = 0x3a8b19d1;     ;; owner -> factory
+const op::change_owner = 0x6501f354;   ;; owner -> factory
+const op::withdraw = 0x46ed2e94;       ;; owner -> factory
+const op::set_code = 0x1e9b7c63;       ;; owner -> factory (affects only NEW tokens)
+
+;; ---------- token (minter with bonding curve) ----------
+const op::init_token = 0x5a1e7f02;     ;; factory -> minter (once)
+const op::buy = 0x1f3ad9b0;            ;; user -> minter
+const op::claim_fees = 0x7c1f0e44;     ;; anyone -> minter
+const op::platform_fee = 0x50f3e1a7;   ;; minter -> factory (platform share)
+const op::creator_fee = 0x43f0e1a7;    ;; minter -> creator
+const op::refund = 0x52e7c0d1;         ;; minter -> user (failed buy / failed sell)
+
+;; ---------- events (external out messages, dest = addr_extern(topic)) ----------
+const event::token_created = 0x6c61756e; ;; "laun"
+const event::trade = 0x74726164;         ;; "trad"
+
+;; ---------- errors ----------
+const error::wrong_op = 0xffff;
+const error::not_owner = 73;
+const error::not_valid_wallet = 74;
+const error::wrong_workchain = 333;
+const error::balance_error = 47;
+const error::not_enough_gas = 48;
+const error::invalid_message = 49;
+const error::not_factory = 80;
+const error::already_initialized = 81;
+const error::not_initialized = 82;
+const error::bad_params = 83;
+const error::content_too_big = 84;
+const error::not_enough_ton = 85;
+
+;; refund reasons (stored in refund body so the UI can explain what happened)
+const refund::slippage = 1;
+const refund::max_supply = 2;
+const refund::max_buy = 3;
+const refund::too_small = 4;
+
+;; ---------- economics / limits ----------
+const BPS = 10000;
+const MAX_CREATOR_FEE_BPS = 500;      ;; 5%
+const MAX_PLATFORM_FEE_BPS = 200;     ;; 2%
+
+;; Value kept by every buy for gas: mint message, wallet deploy, excess back.
+;; Unused part comes back to the buyer as `excesses`.
+const BUY_GAS = 50000000;             ;; 0.05 TON
+;; Minimum TON attached to a burn (sell) handled by the minter.
+const SELL_MIN_VALUE = 30000000;      ;; 0.03 TON
+;; Minimum TON the user wallet requires to start a burn (wallet gas + minter).
+const WALLET_BURN_MIN_VALUE = 40000000; ;; 0.04 TON
+;; Storage deposit that every token contract keeps forever on top of the reserve.
+const TOKEN_STORAGE_DEPOSIT = 100000000; ;; 0.1 TON
+;; Gas for factory -> minter deployment message.
+const DEPLOY_GAS = 100000000;         ;; 0.1 TON
+;; Minimum trade size (net TON into the curve).
+const MIN_TRADE = 10000000;           ;; 0.01 TON
+
+;; Curve bounds (validated by the factory).
+const MIN_VIRTUAL_TON = 1000000000;               ;; 1 TON
+const MAX_VIRTUAL_TON = 100000 * 1000000000;      ;; 100k TON
+const MIN_MAX_SUPPLY = 1000000 * 1000000000;      ;; 1M tokens (9 decimals)
+const MAX_MAX_SUPPLY = 1000000000000000000000000000; ;; 1e18 tokens * 1e9
+
+;; Metadata limit: on-chain logo up to ~12 KB.
+const MAX_CONTENT_CELLS = 400;
+const MAX_CONTENT_BITS = 120000;

@@ -1,0 +1,21 @@
+{
+  "network": "testnet",
+  "awMode": "full",
+  "factories": [],
+  "toncenterApiKey": "",
+  "toncenterUrl": "",
+  "hiddenTokens": [],
+  "blockedWords": [
+    "scam"
+  ],
+  "supportUrl": "",
+  "sourceUrl": "https://github.com/gru2007/floe",
+  "networks": {
+    "testnet": {
+      "factories": []
+    },
+    "mainnet": {
+      "factories": []
+    }
+  }
+}

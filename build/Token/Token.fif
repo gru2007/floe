@@ -1,0 +1,1082 @@
+"Asm.fif" include
+// automatically generated from `contracts/token.fc` incl:`contracts/imports/stdlib.fc` incl:`contracts/imports/constants.fc` incl:`contracts/imports/utils.fc` 
+PROGRAM{
+  DECLPROC ~load_bool
+  DECLPROC store_bool
+  DECLPROC store_address_none
+  DECLPROC is_address_none
+  DECLPROC store_msg_flags_and_address_none
+  DECLPROC ~load_msg_flags
+  DECLPROC is_bounced
+  DECLPROC ~skip_bounced_prefix
+  DECLPROC store_statinit_ref_and_body_ref
+  DECLPROC store_only_body_ref
+  DECLPROC store_prefix_only_body
+  DECLPROC ~retrieve_fwd_fee
+  DECLPROC ~load_op
+  DECLPROC ~skip_op
+  DECLPROC store_op
+  DECLPROC ~load_query_id
+  DECLPROC ~skip_query_id
+  DECLPROC store_query_id
+  DECLPROC ~load_op_and_query_id
+  DECLPROC ~set_token_snake_metadata_entry
+  DECLPROC create_token_onchain_metadata
+  DECLPROC check_same_workchain
+  DECLPROC pack_jetton_wallet_data
+  DECLPROC calculate_jetton_wallet_state_init
+  DECLPROC calculate_address_by_state_init
+  DECLPROC calculate_user_jetton_wallet_address
+  DECLPROC token_initial_data
+  DECLPROC calculate_token_state_init
+  DECLPROC send_simple
+  DECLPROC emit_log
+  DECLPROC load_data
+  DECLPROC save_data
+  DECLPROC ceil_div
+  DECLPROC curve_tokens_out
+  DECLPROC curve_ton_out
+  DECLPROC split_fees
+  DECLPROC emit_trade
+  DECLPROC send_refund
+  DECLPROC mint_to
+  DECLPROC do_buy
+  DECLPROC do_sell
+  DECLPROC recv_internal
+  106029 DECLMETHOD get_jetton_data
+  103289 DECLMETHOD get_wallet_address
+  84418 DECLMETHOD get_token_data
+  98544 DECLMETHOD get_buy_quote
+  118226 DECLMETHOD get_sell_quote
+  DECLGLOBVAR st::inited
+  DECLGLOBVAR st::factory
+  DECLGLOBVAR st::index
+  DECLGLOBVAR st::supply
+  DECLGLOBVAR st::reserve
+  DECLGLOBVAR st::fees_creator
+  DECLGLOBVAR st::fees_platform
+  DECLGLOBVAR st::creator
+  DECLGLOBVAR st::creator_fee_bps
+  DECLGLOBVAR st::platform_fee_bps
+  DECLGLOBVAR st::created_at
+  DECLGLOBVAR st::vt
+  DECLGLOBVAR st::vj
+  DECLGLOBVAR st::max_supply
+  DECLGLOBVAR st::max_buy
+  DECLGLOBVAR st::content
+  DECLGLOBVAR st::wallet_code
+  ~load_bool PROCINLINE:<{
+    1 LDI
+    SWAP
+  }>
+  store_bool PROCINLINE:<{
+    SWAP
+    1 STI
+  }>
+  store_address_none PROCINLINE:<{
+    0 PUSHINT
+    SWAP
+    2 STU
+  }>
+  is_address_none PROCINLINE:<{
+    2 PLDU
+    0 EQINT
+  }>
+  store_msg_flags_and_address_none PROCINLINE:<{
+    SWAP
+    6 STU
+  }>
+  ~load_msg_flags PROCINLINE:<{
+    4 LDU
+    SWAP
+  }>
+  is_bounced PROCINLINE:<{
+    1 PUSHINT
+    AND
+    1 EQINT
+  }>
+  ~skip_bounced_prefix PROCINLINE:<{
+    32 PUSHINT
+    SDSKIPFIRST
+  }>
+  store_statinit_ref_and_body_ref PROCINLINE:<{
+    7 PUSHINT
+    s0 s3 XCHG2
+    108 STU
+    STREF
+    STREF
+  }>
+  store_only_body_ref PROCINLINE:<{
+    1 PUSHINT
+    ROT
+    107 STU
+    STREF
+  }>
+  store_prefix_only_body PROCINLINE:<{
+    0 PUSHINT
+    SWAP
+    107 STU
+  }>
+  ~retrieve_fwd_fee PROCINLINE:<{
+    LDMSGADDR
+    NIP
+    LDVARUINT16
+    NIP
+    SKIPDICT
+    LDVARUINT16
+    NIP
+    LDVARUINT16
+    SWAP
+  }>
+  ~load_op PROCINLINE:<{
+    32 LDU
+    SWAP
+  }>
+  ~skip_op PROCINLINE:<{
+    32 PUSHINT
+    SDSKIPFIRST
+  }>
+  store_op PROCINLINE:<{
+    SWAP
+    32 STU
+  }>
+  ~load_query_id PROCINLINE:<{
+    64 LDU
+    SWAP
+  }>
+  ~skip_query_id PROCINLINE:<{
+    64 PUSHINT
+    SDSKIPFIRST
+  }>
+  store_query_id PROCINLINE:<{
+    SWAP
+    64 STU
+  }>
+  ~load_op_and_query_id PROCINLINE:<{
+    ~load_op INLINECALLDICT
+    SWAP
+    ~load_query_id INLINECALLDICT
+    s1 s2 XCHG
+  }>
+  ~set_token_snake_metadata_entry PROC:<{
+    0 PUSHINT
+    NEWC
+    8 STU
+    SWAP
+    STSLICER
+    ENDC
+    s0 s2 XCHG
+    8 PUSHPOW2
+    DICTUSETREF
+  }>
+  create_token_onchain_metadata PROCINLINE:<{
+    0 PUSHINT
+    NEWC
+    8 STU
+    STDICT
+    ENDC
+  }>
+  check_same_workchain PROCINLINE:<{
+    REWRITESTDADDR
+    DROP
+    0 EQINT
+    333 THROWIFNOT
+  }>
+  pack_jetton_wallet_data PROCINLINE:<{
+    NEWC
+    s0 s3 XCHG2
+    STVARUINT16
+    SWAP
+    STSLICER
+    SWAP
+    STSLICER
+    ENDC
+  }>
+  calculate_jetton_wallet_state_init PROCINLINE:<{
+    0 PUSHINT
+    s0 s1 s2 XCPUXC
+    s1 s4 XCHG
+    pack_jetton_wallet_data INLINECALLDICT
+    s2 PUSH
+    NEWC
+    2 STU
+    s1 s2 XCHG
+    STOPTREF
+    STOPTREF
+    1 STU
+    ENDC
+  }>
+  calculate_address_by_state_init PROCINLINE:<{
+    HASHCU
+    0 PUSHINT
+    4 PUSHINT
+    NEWC
+    3 STU
+    8 STI
+    256 STU
+    ENDC
+    CTOS
+  }>
+  calculate_user_jetton_wallet_address PROCINLINE:<{
+    calculate_jetton_wallet_state_init INLINECALLDICT
+    calculate_address_by_state_init INLINECALLDICT
+  }>
+  token_initial_data PROCINLINE:<{
+    0 PUSHINT
+    NEWC
+    1 STU
+    ROT
+    STSLICER
+    64 STU
+    ENDC
+  }>
+  calculate_token_state_init PROCINLINE:<{
+    s0 s2 XCHG
+    0 PUSHINT
+    s0 s2 XCHG
+    token_initial_data INLINECALLDICT
+    OVER
+    NEWC
+    2 STU
+    s1 s3 XCHG
+    STOPTREF
+    s1 s2 XCHG
+    STOPTREF
+    1 STU
+    ENDC
+  }>
+  send_simple PROCINLINE:<{
+    NEWC
+    16 PUSHINT
+    store_msg_flags_and_address_none INLINECALLDICT
+    s0 s4 XCHG2
+    STSLICER
+    ROT
+    STVARUINT16
+    SWAP
+    store_only_body_ref INLINECALLDICT
+    ENDC
+    SWAP
+    SENDRAWMSG
+  }>
+  emit_log PROCINLINE:<{
+    1 PUSHINT
+    0 PUSHINT
+    DUP
+    8 PUSHPOW2
+    s3 s1 PUSH2
+    3 PUSHINT
+    NEWC
+    2 STU
+    2 STU
+    2 STU
+    9 STU
+    s1 s5 XCHG
+    256 STU
+    s1 s4 XCHG
+    96 STU
+    s1 s3 XCHG
+    1 STU
+    s1 s2 XCHG
+    1 STU
+    STREF
+    ENDC
+    0 PUSHINT
+    SENDRAWMSG
+  }>
+  load_data PROCINLINE:<{
+    c4 PUSH
+    CTOS
+    1 LDU
+    SWAP
+    st::inited SETGLOB
+    LDMSGADDR
+    SWAP
+    st::factory SETGLOB
+    64 LDU
+    SWAP
+    st::index SETGLOB
+    st::inited GETGLOB
+    IF:<{
+      LDVARUINT16
+      SWAP
+      st::supply SETGLOB
+      LDVARUINT16
+      SWAP
+      st::reserve SETGLOB
+      LDVARUINT16
+      SWAP
+      st::fees_creator SETGLOB
+      LDVARUINT16
+      SWAP
+      st::fees_platform SETGLOB
+      LDREF
+      SWAP
+      CTOS
+      SWAP
+      LDREF
+      SWAP
+      st::content SETGLOB
+      LDREF
+      DROP
+      st::wallet_code SETGLOB
+      LDMSGADDR
+      SWAP
+      st::creator SETGLOB
+      16 LDU
+      SWAP
+      st::creator_fee_bps SETGLOB
+      16 LDU
+      SWAP
+      st::platform_fee_bps SETGLOB
+      32 LDU
+      SWAP
+      st::created_at SETGLOB
+      LDREF
+      DROP
+      CTOS
+      LDVARUINT16
+      SWAP
+      st::vt SETGLOB
+      LDVARUINT16
+      SWAP
+      st::vj SETGLOB
+      LDVARUINT16
+      SWAP
+      st::max_supply SETGLOB
+      LDVARUINT16
+      DROP
+      st::max_buy SETGLOB
+    }>ELSE<{
+      DROP
+    }>
+  }>
+  save_data PROCINLINE:<{
+    st::wallet_code GETGLOB
+    st::content GETGLOB
+    NEWC
+    st::vt GETGLOB
+    STVARUINT16
+    st::vj GETGLOB
+    STVARUINT16
+    st::max_supply GETGLOB
+    STVARUINT16
+    st::max_buy GETGLOB
+    STVARUINT16
+    ENDC
+    st::created_at GETGLOB
+    st::platform_fee_bps GETGLOB
+    st::creator_fee_bps GETGLOB
+    NEWC
+    st::creator GETGLOB
+    STSLICER
+    16 STU
+    16 STU
+    32 STU
+    STREF
+    ENDC
+    st::index GETGLOB
+    1 PUSHINT
+    NEWC
+    1 STU
+    st::factory GETGLOB
+    STSLICER
+    64 STU
+    st::supply GETGLOB
+    STVARUINT16
+    st::reserve GETGLOB
+    STVARUINT16
+    st::fees_creator GETGLOB
+    STVARUINT16
+    st::fees_platform GETGLOB
+    STVARUINT16
+    STREF
+    STREF
+    STREF
+    ENDC
+    c4 POP
+  }>
+  ceil_div PROCINLINE:<{
+    SWAP
+    NEGATE
+    SWAP
+    DIV
+    NEGATE
+  }>
+  curve_tokens_out PROCINLINE:<{
+    st::vt GETGLOB
+    st::vj GETGLOB
+    MUL
+    st::vj GETGLOB
+    s0 s3 XCHG2
+    SUB
+    s2 s0 PUSH2
+    DIV
+    ROT
+    ADD
+    s1 s2 XCHG
+    ceil_div INLINECALLDICT
+    s0 s1 PUSH2
+    GEQ
+    IF:<{
+      2DROP
+      0 PUSHINT
+    }>ELSE<{
+      SUB
+    }>
+  }>
+  curve_ton_out PROCINLINE:<{
+    st::vt GETGLOB
+    st::vj GETGLOB
+    MUL
+    st::vj GETGLOB
+    s0 s3 XCHG2
+    SUB
+    s2 s0 PUSH2
+    DIV
+    s0 s2 XCHG
+    ADD
+    s1 s2 XCHG
+    ceil_div INLINECALLDICT
+    s0 s1 PUSH2
+    GEQ
+    IF:<{
+      2DROP
+      0 PUSHINT
+    }>ELSE<{
+      SUB
+    }>
+  }>
+  split_fees PROCINLINE:<{
+    st::creator_fee_bps GETGLOB
+    s1 s(-1) PUXC
+    10000 PUSHINT
+    MULDIV
+    st::platform_fee_bps GETGLOB
+    s1 s2 XCHG
+    10000 PUSHINT
+    MULDIV
+  }>
+  emit_trade PROCINLINE:<{
+    1953653092 PUSHINT
+    NOW
+    OVER
+    NEWC
+    32 STU
+    s1 s7 XCHG
+    1 STU
+    s0 s5 XCHG2
+    STSLICER
+    s0 s3 XCHG2
+    STVARUINT16
+    SWAP
+    STVARUINT16
+    SWAP
+    STVARUINT16
+    st::supply GETGLOB
+    STVARUINT16
+    st::reserve GETGLOB
+    STVARUINT16
+    s1 s2 XCHG
+    32 STU
+    ENDC
+    emit_log INLINECALLDICT
+  }>
+  send_refund PROCINLINE:<{
+    0 PUSHINT
+    RAWRESERVE
+    0 PUSHINT
+    NEWC
+    1390919889 PUSHINT
+    store_op INLINECALLDICT
+    s0 s3 XCHG2
+    store_query_id INLINECALLDICT
+    8 STU
+    ENDC
+    130 PUSHINT
+    send_simple INLINECALLDICT
+  }>
+  mint_to PROCINLINE:<{
+    MYADDR
+    st::wallet_code GETGLOB
+    s4 PUSH
+    -ROT
+    calculate_jetton_wallet_state_init INLINECALLDICT
+    DUP
+    calculate_address_by_state_init INLINECALLDICT
+    0 PUSHINT
+    NEWC
+    395134233 PUSHINT
+    store_op INLINECALLDICT
+    s0 s4 XCHG2
+    store_query_id INLINECALLDICT
+    s0 s4 XCHG2
+    STVARUINT16
+    MYADDR
+    STSLICER
+    s0 s4 XCHG2
+    STSLICER
+    OVER
+    STVARUINT16
+    1 STU
+    ENDC
+    NEWC
+    24 PUSHINT
+    store_msg_flags_and_address_none INLINECALLDICT
+    ROT
+    STSLICER
+    0 PUSHINT
+    STVARUINT16
+    -ROT
+    store_statinit_ref_and_body_ref INLINECALLDICT
+    ENDC
+    144 PUSHINT
+    SENDRAWMSG
+  }>
+  do_buy PROCINLINE:<{
+    -ROT
+    SUB
+    SWAP
+    ADD
+    s3 PUSH
+    split_fees INLINECALLDICT
+    s5 s1 PUSH2
+    SUB
+    OVER
+    SUB
+    st::supply GETGLOB
+    OVER
+    curve_tokens_out INLINECALLDICT
+    DUP
+    0 EQINT
+    s1 s7 PUXC
+    LESS
+    s1 s7 XCHG
+    OR
+    IF:<{
+      3 BLKDROP
+      2 2 BLKDROP2
+      1 PUSHINT
+      SWAP
+      send_refund INLINECALLDICT
+    }>ELSE<{
+      st::supply GETGLOB
+      s6 PUSH
+      ADD
+      st::max_supply GETGLOB
+      GREATER
+      IFJMP:<{
+        3 BLKDROP
+        2 2 BLKDROP2
+        2 PUSHINT
+        SWAP
+        send_refund INLINECALLDICT
+      }>
+      st::max_buy GETGLOB
+      0 GTINT
+      st::max_buy GETGLOB
+      s7 s(-1) PUXC
+      GREATER
+      AND
+      IFJMP:<{
+        3 BLKDROP
+        2 2 BLKDROP2
+        3 PUSHINT
+        SWAP
+        send_refund INLINECALLDICT
+      }>
+      st::supply GETGLOB
+      s6 PUSH
+      ADD
+      st::supply SETGLOB
+      st::reserve GETGLOB
+      SWAP
+      ADD
+      st::reserve SETGLOB
+      st::fees_creator GETGLOB
+      s2 PUSH
+      ADD
+      st::fees_creator SETGLOB
+      st::fees_platform GETGLOB
+      OVER
+      ADD
+      st::fees_platform SETGLOB
+      save_data INLINECALLDICT
+      s2 s5 XCPU
+      ADD
+      0 PUSHINT
+      RAWRESERVE
+      1 PUSHINT
+      s0 s2 XCHG
+      ADD
+      s5 s4 s2 PUXC2
+      s4 s5 PUXC
+      emit_trade INLINECALLDICT
+      SWAP
+      mint_to INLINECALLDICT
+    }>
+  }>
+  do_sell PROCINLINE:<{
+    DUP
+    30000000 PUSHINT
+    GEQ
+    48 THROWIFNOT
+    s3 PUSH
+    0 GTINT
+    st::supply GETGLOB
+    s5 s(-1) PUXC
+    LEQ
+    AND
+    47 THROWIFNOT
+    st::supply GETGLOB
+    s4 PUSH
+    curve_ton_out INLINECALLDICT
+    st::reserve GETGLOB
+    MIN
+    DUP
+    split_fees INLINECALLDICT
+    s2 s1 PUSH2
+    SUB
+    OVER
+    SUB
+    DUP
+    0 GTINT
+    s1 s7 PUXC
+    GEQ
+    s1 s7 XCHG
+    AND
+    85 THROWIFNOT
+    st::supply GETGLOB
+    s7 PUSH
+    SUB
+    st::supply SETGLOB
+    st::reserve GETGLOB
+    s0 s3 XCHG2
+    SUB
+    st::reserve SETGLOB
+    st::fees_creator GETGLOB
+    OVER
+    ADD
+    st::fees_creator SETGLOB
+    st::fees_platform GETGLOB
+    s2 PUSH
+    ADD
+    st::fees_platform SETGLOB
+    save_data INLINECALLDICT
+    2SWAP
+    SUB
+    s3 PUSH
+    SUB
+    0 PUSHINT
+    RAWRESERVE
+    0 PUSHINT
+    s0 s2 XCHG
+    ADD
+    s1 s4 XCHG
+    s1 s5 XCHG
+    s1 s3 XCHG
+    emit_trade INLINECALLDICT
+    0 PUSHINT
+    DUP
+    NEWC
+    32 STU
+    x{466c6f653a2073656c6c2070726f6365656473} PUSHSLICE
+    STSLICER
+    ENDC
+    130 PUSHINT
+    send_simple INLINECALLDICT
+  }>
+  recv_internal PROC:<{
+    SWAP
+    CTOS
+    ~load_msg_flags INLINECALLDICT
+    load_data INLINECALLDICT
+    1 PUSHINT
+    AND
+    IFJMP:<{
+      s1 s3 XCHG
+      3 BLKDROP
+      ~skip_bounced_prefix INLINECALLDICT
+      ~load_op INLINECALLDICT
+      395134233 PUSHINT
+      EQUAL
+      IF:<{
+        ~skip_query_id INLINECALLDICT
+        st::supply GETGLOB
+        SWAP
+        LDVARUINT16
+        DROP
+        SUB
+        st::supply SETGLOB
+        save_data INLINECALLDICT
+      }>ELSE<{
+        DROP
+      }>
+    }>
+    LDMSGADDR
+    DROP
+    OVER
+    SBITS
+    32 LESSINT
+    IFJMP:<{
+      4 BLKDROP
+    }>
+    SWAP
+    ~load_op_and_query_id INLINECALLDICT
+    OVER
+    1511948034 PUSHINT
+    EQUAL
+    IFJMP:<{
+      NIP
+      st::inited GETGLOB
+      0 EQINT
+      81 THROWIFNOT
+      st::factory GETGLOB
+      s1 s3 XCHG
+      SDEQ
+      80 THROWIFNOT
+      LDMSGADDR
+      SWAP
+      st::creator SETGLOB
+      16 LDU
+      SWAP
+      st::creator_fee_bps SETGLOB
+      16 LDU
+      SWAP
+      st::platform_fee_bps SETGLOB
+      LDVARUINT16
+      LDVARUINT16
+      LDREF
+      SWAP
+      CTOS
+      SWAP
+      LDREF
+      SWAP
+      st::content SETGLOB
+      LDREF
+      DROP
+      st::wallet_code SETGLOB
+      LDVARUINT16
+      SWAP
+      st::vt SETGLOB
+      LDVARUINT16
+      SWAP
+      st::vj SETGLOB
+      LDVARUINT16
+      SWAP
+      st::max_supply SETGLOB
+      LDVARUINT16
+      DROP
+      st::max_buy SETGLOB
+      0 PUSHINT
+      st::supply SETGLOB
+      0 PUSHINT
+      st::reserve SETGLOB
+      0 PUSHINT
+      st::fees_creator SETGLOB
+      0 PUSHINT
+      st::fees_platform SETGLOB
+      NOW
+      st::created_at SETGLOB
+      1 PUSHINT
+      st::inited SETGLOB
+      save_data INLINECALLDICT
+      OVER
+      IFJMP:<{
+        st::creator GETGLOB
+        s4 s5 s5 XCHG3
+        s3 s1 s3 XCHG3
+        100000000 PUSHINT
+        do_buy INLINECALLDICT
+      }>
+      2DROP
+      -ROT
+      SUB
+      100000000 PUSHINT
+      ADD
+      2 PUSHINT
+      RAWRESERVE
+      st::creator GETGLOB
+      0 PUSHINT
+      NEWC
+      3576854235 PUSHINT
+      store_op INLINECALLDICT
+      s0 s3 XCHG2
+      store_query_id INLINECALLDICT
+      ENDC
+      s1 s2 XCHG
+      130 PUSHINT
+      send_simple INLINECALLDICT
+    }>
+    st::inited GETGLOB
+    82 THROWIFNOT
+    OVER
+    523950512 PUSHINT
+    EQUAL
+    IFJMP:<{
+      NIP
+      SWAP
+      LDVARUINT16
+      DROP
+      s3 PUSH
+      50000000 PUSHINT
+      SUB
+      DUP
+      10000000 PUSHINT
+      GEQ
+      85 THROWIFNOT
+      s3 s5 XCHG
+      s3 s4 XCHG2
+      0 PUSHINT
+      do_buy INLINECALLDICT
+    }>
+    OVER
+    2078119902 PUSHINT
+    EQUAL
+    IFJMP:<{
+      2DROP
+      LDVARUINT16
+      LDMSGADDR
+      LDMSGADDR
+      LDOPTREF
+      DROP
+      MYADDR
+      st::wallet_code GETGLOB
+      s4 PUSH
+      -ROT
+      calculate_user_jetton_wallet_address INLINECALLDICT
+      s0 s5 XCHG2
+      SDEQ
+      74 THROWIFNOT
+      0 PUSHINT
+      s4 PUSH
+      ISNULL
+      IFNOT:<{
+        DROP
+        s0 s3 XCHG
+        CTOS
+        LDVARUINT16
+        DROP
+        s0 s3 XCHG
+      }>ELSE<{
+        s4 POP
+      }>
+      DUP
+      is_address_none INLINECALLDICT
+      IF:<{
+        DROP
+        DUP
+      }>ELSE<{
+      }>
+      s3 s5 s4 XCHG3
+      do_sell INLINECALLDICT
+    }>
+    OVER
+    2082410052 PUSHINT
+    EQUAL
+    IFJMP:<{
+      2 1 BLKDROP2
+      s2 PUSH
+      20000000 PUSHINT
+      GEQ
+      48 THROWIFNOT
+      st::fees_creator GETGLOB
+      st::fees_platform GETGLOB
+      s5 s4 PUSH2
+      SUB
+      s2 PUSH
+      SUB
+      OVER
+      SUB
+      st::reserve GETGLOB
+      GEQ
+      47 THROWIFNOT
+      0 PUSHINT
+      st::fees_creator SETGLOB
+      0 PUSHINT
+      st::fees_platform SETGLOB
+      save_data INLINECALLDICT
+      s5 s4 XCHG2
+      SUB
+      s4 PUSH
+      SUB
+      s3 PUSH
+      SUB
+      0 PUSHINT
+      RAWRESERVE
+      s3 PUSH
+      IF:<{
+        st::creator GETGLOB
+        NEWC
+        1139859879 PUSHINT
+        store_op INLINECALLDICT
+        s2 PUSH
+        store_query_id INLINECALLDICT
+        ENDC
+        s1 s5 s0 XCHG3
+        1 PUSHINT
+        send_simple INLINECALLDICT
+      }>ELSE<{
+        s3 POP
+      }>
+      OVER
+      IF:<{
+        st::factory GETGLOB
+        NEWC
+        1358160295 PUSHINT
+        store_op INLINECALLDICT
+        s4 PUSH
+        store_query_id INLINECALLDICT
+        ENDC
+        s1 s3 s0 XCHG3
+        1 PUSHINT
+        send_simple INLINECALLDICT
+      }>ELSE<{
+        NIP
+      }>
+      0 PUSHINT
+      NEWC
+      3576854235 PUSHINT
+      store_op INLINECALLDICT
+      s0 s3 XCHG2
+      store_query_id INLINECALLDICT
+      ENDC
+      s1 s2 XCHG
+      130 PUSHINT
+      send_simple INLINECALLDICT
+    }>
+    s5 POP
+    DUP
+    745978227 PUSHINT
+    EQUAL
+    IFJMP:<{
+      DROP
+      s0 s2 XCHG
+      10000000 PUSHINT
+      GREATER
+      48 THROWIFNOT
+      SWAP
+      LDMSGADDR
+      1 LDU
+      DROP
+      OVER
+      REWRITESTDADDR
+      DROP
+      SWAP
+      IF:<{
+        NEWC
+        s2 PUSH
+        STSLICER
+        ENDC
+      }>ELSE<{
+        PUSHNULL
+      }>
+      NEWC
+      3513996288 PUSHINT
+      store_op INLINECALLDICT
+      s0 s5 XCHG2
+      store_query_id INLINECALLDICT
+      SWAP
+      0 EQINT
+      IF:<{
+        MYADDR
+        st::wallet_code GETGLOB
+        s2 s3 XCHG
+        calculate_user_jetton_wallet_address INLINECALLDICT
+        STSLICER
+      }>ELSE<{
+        0 PUSHINT
+        s2 POP
+        2 STU
+      }>
+      s0 s2 XCHG
+      0 PUSHINT
+      s0 s3 XCHG
+      STOPTREF
+      ENDC
+      s1 s2 XCHG
+      64 PUSHINT
+      send_simple INLINECALLDICT
+    }>
+    4 1 BLKDROP2
+    3547469196 PUSHINT
+    EQUAL
+    IFJMP:<{
+    }>
+    16 PUSHPOW2DEC
+    THROWANY
+  }>
+  get_jetton_data PROC:<{
+    load_data INLINECALLDICT
+    st::inited GETGLOB
+    82 THROWIFNOT
+    st::supply GETGLOB
+    st::supply GETGLOB
+    st::max_supply GETGLOB
+    LESS
+    IF:<{
+      -1 PUSHINT
+    }>ELSE<{
+      0 PUSHINT
+    }>
+    <b 0 2 u, b> <s PUSHSLICE
+    st::content GETGLOB
+    st::wallet_code GETGLOB
+  }>
+  get_wallet_address PROC:<{
+    load_data INLINECALLDICT
+    MYADDR
+    st::wallet_code GETGLOB
+    calculate_user_jetton_wallet_address INLINECALLDICT
+  }>
+  get_token_data PROC:<{
+    load_data INLINECALLDICT
+    st::inited GETGLOB
+    82 THROWIFNOT
+    st::inited GETGLOB
+    st::factory GETGLOB
+    st::index GETGLOB
+    st::creator GETGLOB
+    st::supply GETGLOB
+    st::reserve GETGLOB
+    st::vt GETGLOB
+    st::vj GETGLOB
+    st::max_supply GETGLOB
+    st::max_buy GETGLOB
+    st::creator_fee_bps GETGLOB
+    st::platform_fee_bps GETGLOB
+    st::fees_creator GETGLOB
+    st::fees_platform GETGLOB
+    st::created_at GETGLOB
+  }>
+  get_buy_quote PROC:<{
+    load_data INLINECALLDICT
+    DUP
+    split_fees INLINECALLDICT
+    st::supply GETGLOB
+    s3 s2 XCPU
+    SUB
+    OVER
+    SUB
+    s1 s3 XCHG
+    curve_tokens_out INLINECALLDICT
+    s0 s2 XCHG
+    ADD
+  }>
+  get_sell_quote PROC:<{
+    load_data INLINECALLDICT
+    st::supply GETGLOB
+    SWAP
+    curve_ton_out INLINECALLDICT
+    st::reserve GETGLOB
+    MIN
+    DUP
+    split_fees INLINECALLDICT
+    s2 s1 XCPU
+    SUB
+    s2 PUSH
+    SUB
+    s0 s2 XCHG
+    ADD
+  }>
+}END>c

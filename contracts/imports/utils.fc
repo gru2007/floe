@@ -1,0 +1,87 @@
+;; helpers shared by factory / token / wallet
+
+() check_same_workchain(slice addr) impure inline {
+    (int wc, _) = parse_std_addr(addr);
+    throw_unless(error::wrong_workchain, wc == MY_WORKCHAIN);
+}
+
+;; ---------- jetton wallet address ----------
+
+cell pack_jetton_wallet_data(int balance, slice owner_address, slice jetton_master_address) inline {
+    return begin_cell()
+        .store_coins(balance)
+        .store_slice(owner_address)
+        .store_slice(jetton_master_address)
+        .end_cell();
+}
+
+cell calculate_jetton_wallet_state_init(slice owner_address, slice jetton_master_address, cell jetton_wallet_code) inline {
+    return begin_cell()
+        .store_uint(0, 2)
+        .store_maybe_ref(jetton_wallet_code)
+        .store_maybe_ref(pack_jetton_wallet_data(0, owner_address, jetton_master_address))
+        .store_uint(0, 1)
+        .end_cell();
+}
+
+slice calculate_address_by_state_init(cell state_init) inline {
+    return begin_cell()
+        .store_uint(4, 3)
+        .store_int(MY_WORKCHAIN, 8)
+        .store_uint(cell_hash(state_init), 256)
+        .end_cell()
+        .begin_parse();
+}
+
+slice calculate_user_jetton_wallet_address(slice owner_address, slice jetton_master_address, cell jetton_wallet_code) inline {
+    return calculate_address_by_state_init(calculate_jetton_wallet_state_init(owner_address, jetton_master_address, jetton_wallet_code));
+}
+
+;; ---------- token (minter) address ----------
+;; Token address depends only on (factory, index) so the factory can expose
+;; get_token_address(index) and the UI can enumerate tokens without a server.
+
+cell token_initial_data(slice factory, int index) inline {
+    return begin_cell()
+        .store_uint(0, 1)          ;; not initialized
+        .store_slice(factory)
+        .store_uint(index, 64)
+        .end_cell();
+}
+
+cell calculate_token_state_init(slice factory, int index, cell token_code) inline {
+    return begin_cell()
+        .store_uint(0, 2)
+        .store_maybe_ref(token_code)
+        .store_maybe_ref(token_initial_data(factory, index))
+        .store_uint(0, 1)
+        .end_cell();
+}
+
+;; ---------- messages ----------
+
+() send_simple(slice to, int amount, cell body, int mode) impure inline {
+    send_raw_message(begin_cell()
+        .store_msg_flags_and_address_none(NON_BOUNCEABLE)
+        .store_slice(to)
+        .store_coins(amount)
+        .store_only_body_ref(body)
+        .end_cell(), mode);
+}
+
+;; External "log" message: dest = addr_extern with 256-bit topic.
+;; Indexers (toncenter / tonapi) return these as out_msgs with destination null
+;; and the body as BOC, which is how the mini app builds charts without a server.
+() emit_log(int topic, cell body) impure inline {
+    send_raw_message(begin_cell()
+        .store_uint(3, 2)            ;; ext_out_msg_info$11
+        .store_uint(0, 2)            ;; src: addr_none (filled by validator)
+        .store_uint(1, 2)            ;; dest: addr_extern$01
+        .store_uint(256, 9)          ;; len
+        .store_uint(topic, 256)
+        .store_uint(0, 64 + 32)      ;; created_lt, created_at
+        .store_uint(0, 1)            ;; no state init
+        .store_uint(1, 1)            ;; body in ref
+        .store_ref(body)
+        .end_cell(), SEND_MODE_REGULAR);
+}

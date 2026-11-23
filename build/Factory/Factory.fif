@@ -1,0 +1,570 @@
+"Asm.fif" include
+// automatically generated from `contracts/factory.fc` incl:`contracts/imports/stdlib.fc` incl:`contracts/imports/constants.fc` incl:`contracts/imports/utils.fc` 
+PROGRAM{
+  DECLPROC ~load_bool
+  DECLPROC store_bool
+  DECLPROC store_address_none
+  DECLPROC is_address_none
+  DECLPROC store_msg_flags_and_address_none
+  DECLPROC ~load_msg_flags
+  DECLPROC is_bounced
+  DECLPROC ~skip_bounced_prefix
+  DECLPROC store_statinit_ref_and_body_ref
+  DECLPROC store_only_body_ref
+  DECLPROC store_prefix_only_body
+  DECLPROC ~retrieve_fwd_fee
+  DECLPROC ~load_op
+  DECLPROC ~skip_op
+  DECLPROC store_op
+  DECLPROC ~load_query_id
+  DECLPROC ~skip_query_id
+  DECLPROC store_query_id
+  DECLPROC ~load_op_and_query_id
+  DECLPROC ~set_token_snake_metadata_entry
+  DECLPROC create_token_onchain_metadata
+  DECLPROC check_same_workchain
+  DECLPROC pack_jetton_wallet_data
+  DECLPROC calculate_jetton_wallet_state_init
+  DECLPROC calculate_address_by_state_init
+  DECLPROC calculate_user_jetton_wallet_address
+  DECLPROC token_initial_data
+  DECLPROC calculate_token_state_init
+  DECLPROC send_simple
+  DECLPROC emit_log
+  DECLPROC load_data
+  DECLPROC save_data
+  DECLPROC validate_curve
+  DECLPROC recv_internal
+  76063 DECLMETHOD get_factory_data
+  77544 DECLMETHOD get_token_address
+  ~load_bool PROCINLINE:<{
+    1 LDI
+    SWAP
+  }>
+  store_bool PROCINLINE:<{
+    SWAP
+    1 STI
+  }>
+  store_address_none PROCINLINE:<{
+    0 PUSHINT
+    SWAP
+    2 STU
+  }>
+  is_address_none PROCINLINE:<{
+    2 PLDU
+    0 EQINT
+  }>
+  store_msg_flags_and_address_none PROCINLINE:<{
+    SWAP
+    6 STU
+  }>
+  ~load_msg_flags PROCINLINE:<{
+    4 LDU
+    SWAP
+  }>
+  is_bounced PROCINLINE:<{
+    1 PUSHINT
+    AND
+    1 EQINT
+  }>
+  ~skip_bounced_prefix PROCINLINE:<{
+    32 PUSHINT
+    SDSKIPFIRST
+  }>
+  store_statinit_ref_and_body_ref PROCINLINE:<{
+    7 PUSHINT
+    s0 s3 XCHG2
+    108 STU
+    STREF
+    STREF
+  }>
+  store_only_body_ref PROCINLINE:<{
+    1 PUSHINT
+    ROT
+    107 STU
+    STREF
+  }>
+  store_prefix_only_body PROCINLINE:<{
+    0 PUSHINT
+    SWAP
+    107 STU
+  }>
+  ~retrieve_fwd_fee PROCINLINE:<{
+    LDMSGADDR
+    NIP
+    LDVARUINT16
+    NIP
+    SKIPDICT
+    LDVARUINT16
+    NIP
+    LDVARUINT16
+    SWAP
+  }>
+  ~load_op PROCINLINE:<{
+    32 LDU
+    SWAP
+  }>
+  ~skip_op PROCINLINE:<{
+    32 PUSHINT
+    SDSKIPFIRST
+  }>
+  store_op PROCINLINE:<{
+    SWAP
+    32 STU
+  }>
+  ~load_query_id PROCINLINE:<{
+    64 LDU
+    SWAP
+  }>
+  ~skip_query_id PROCINLINE:<{
+    64 PUSHINT
+    SDSKIPFIRST
+  }>
+  store_query_id PROCINLINE:<{
+    SWAP
+    64 STU
+  }>
+  ~load_op_and_query_id PROCINLINE:<{
+    ~load_op INLINECALLDICT
+    SWAP
+    ~load_query_id INLINECALLDICT
+    s1 s2 XCHG
+  }>
+  ~set_token_snake_metadata_entry PROC:<{
+    0 PUSHINT
+    NEWC
+    8 STU
+    SWAP
+    STSLICER
+    ENDC
+    s0 s2 XCHG
+    8 PUSHPOW2
+    DICTUSETREF
+  }>
+  create_token_onchain_metadata PROCINLINE:<{
+    0 PUSHINT
+    NEWC
+    8 STU
+    STDICT
+    ENDC
+  }>
+  check_same_workchain PROCINLINE:<{
+    REWRITESTDADDR
+    DROP
+    0 EQINT
+    333 THROWIFNOT
+  }>
+  pack_jetton_wallet_data PROCINLINE:<{
+    NEWC
+    s0 s3 XCHG2
+    STVARUINT16
+    SWAP
+    STSLICER
+    SWAP
+    STSLICER
+    ENDC
+  }>
+  calculate_jetton_wallet_state_init PROCINLINE:<{
+    0 PUSHINT
+    s0 s1 s2 XCPUXC
+    s1 s4 XCHG
+    pack_jetton_wallet_data INLINECALLDICT
+    s2 PUSH
+    NEWC
+    2 STU
+    s1 s2 XCHG
+    STOPTREF
+    STOPTREF
+    1 STU
+    ENDC
+  }>
+  calculate_address_by_state_init PROCINLINE:<{
+    HASHCU
+    0 PUSHINT
+    4 PUSHINT
+    NEWC
+    3 STU
+    8 STI
+    256 STU
+    ENDC
+    CTOS
+  }>
+  calculate_user_jetton_wallet_address PROCINLINE:<{
+    calculate_jetton_wallet_state_init INLINECALLDICT
+    calculate_address_by_state_init INLINECALLDICT
+  }>
+  token_initial_data PROCINLINE:<{
+    0 PUSHINT
+    NEWC
+    1 STU
+    ROT
+    STSLICER
+    64 STU
+    ENDC
+  }>
+  calculate_token_state_init PROCINLINE:<{
+    s0 s2 XCHG
+    0 PUSHINT
+    s0 s2 XCHG
+    token_initial_data INLINECALLDICT
+    OVER
+    NEWC
+    2 STU
+    s1 s3 XCHG
+    STOPTREF
+    s1 s2 XCHG
+    STOPTREF
+    1 STU
+    ENDC
+  }>
+  send_simple PROCINLINE:<{
+    NEWC
+    16 PUSHINT
+    store_msg_flags_and_address_none INLINECALLDICT
+    s0 s4 XCHG2
+    STSLICER
+    ROT
+    STVARUINT16
+    SWAP
+    store_only_body_ref INLINECALLDICT
+    ENDC
+    SWAP
+    SENDRAWMSG
+  }>
+  emit_log PROCINLINE:<{
+    1 PUSHINT
+    0 PUSHINT
+    DUP
+    8 PUSHPOW2
+    s3 s1 PUSH2
+    3 PUSHINT
+    NEWC
+    2 STU
+    2 STU
+    2 STU
+    9 STU
+    s1 s5 XCHG
+    256 STU
+    s1 s4 XCHG
+    96 STU
+    s1 s3 XCHG
+    1 STU
+    s1 s2 XCHG
+    1 STU
+    STREF
+    ENDC
+    0 PUSHINT
+    SENDRAWMSG
+  }>
+  load_data PROCINLINE:<{
+    c4 PUSH
+    CTOS
+    LDMSGADDR
+    LDVARUINT16
+    16 LDU
+    64 LDU
+    LDREF
+    LDREF
+    ENDS
+  }>
+  save_data PROCINLINE:<{
+    NEWC
+    s0 s6 XCHG2
+    STSLICER
+    s0 s4 XCHG2
+    STVARUINT16
+    s1 s2 XCHG
+    16 STU
+    64 STU
+    STREF
+    STREF
+    ENDC
+    c4 POP
+  }>
+  validate_curve PROCINLINE:<{
+    LDVARUINT16
+    LDVARUINT16
+    LDVARUINT16
+    LDVARUINT16
+    ENDS
+    s3 PUSH
+    1000000000 PUSHINT
+    GEQ
+    s0 s4 XCHG
+    100000000000000 PUSHINT
+    LEQ
+    s1 s4 XCHG
+    AND
+    83 THROWIFNOT
+    DUP
+    1000000000000000 PUSHINT
+    GEQ
+    OVER
+    1000000000000000000000000000 PUSHINTX
+    LEQ
+    AND
+    83 THROWIFNOT
+    TUCK
+    SUB
+    OVER
+    100 PUSHINT
+    DIV
+    GEQ
+    83 THROWIFNOT
+    OVER
+    0 EQINT
+    OVER
+    1000 PUSHINT
+    DIV
+    s3 s(-1) PUXC
+    GEQ
+    2SWAP
+    LEQ
+    AND
+    OR
+    83 THROWIFNOT
+  }>
+  recv_internal PROC:<{
+    SWAP
+    CTOS
+    ~load_msg_flags INLINECALLDICT
+    1 PUSHINT
+    AND
+    IFJMP:<{
+      4 BLKDROP
+    }>
+    LDMSGADDR
+    DROP
+    OVER
+    SBITS
+    32 LESSINT
+    IFJMP:<{
+      4 BLKDROP
+    }>
+    SWAP
+    ~load_op_and_query_id INLINECALLDICT
+    load_data INLINECALLDICT
+    s7 PUSH
+    209594929 PUSHINT
+    EQUAL
+    IFJMP:<{
+      s7 POP
+      s8 PUSH
+      check_same_workchain INLINECALLDICT
+      s0 s7 XCHG
+      16 LDU
+      LDVARUINT16
+      LDVARUINT16
+      LDREF
+      LDREF
+      ENDS
+      s7 PUSH
+      100000000 PUSHINT
+      ADD
+      100000000 PUSHINT
+      ADD
+      s4 PUSH
+      IF:<{
+        s4 PUSH
+        10000000 PUSHINT
+        GEQ
+        83 THROWIFNOT
+        s4 PUSH
+        50000000 PUSHINT
+        ADD
+        ADD
+      }>
+      s14 s(-1) PUXC
+      GEQ
+      85 THROWIFNOT
+      s4 PUSH
+      500 PUSHINT
+      LEQ
+      83 THROWIFNOT
+      OVER
+      CTOS
+      validate_curve INLINECALLDICT
+      DUP
+      400 PUSHINT
+      CDATASIZEQ NULLSWAPIFNOT2 NULLSWAPIFNOT
+      NIP
+      1 2 BLKDROP2
+      84 THROWIFNOT
+      120000 PUSHINT
+      LEQ
+      84 THROWIFNOT
+      s5 PUSH
+      INC
+      s9 s8 s(-1) XCPUXC
+      s8 s13 s(-1) PU2XC
+      s14 PUSH
+      save_data INLINECALLDICT
+      MYADDR
+      s0 s5 s11 XCPUXC
+      calculate_token_state_init INLINECALLDICT
+      DUP
+      calculate_address_by_state_init INLINECALLDICT
+      s14 s13 XCHG2
+      SUB
+      s0 s6 XCHG2
+      ADD
+      0 PUSHINT
+      RAWRESERVE
+      1818326382 PUSHINT
+      NOW
+      OVER
+      NEWC
+      32 STU
+      s1 s5 XCHG
+      64 STU
+      s12 PUSH
+      STSLICER
+      s11 PUSH
+      STSLICER
+      s1 s4 XCHG
+      32 STU
+      ENDC
+      s1 s3 XCHG
+      emit_log INLINECALLDICT
+      NEWC
+      1511948034 PUSHINT
+      store_op INLINECALLDICT
+      s0 s6 XCHG2
+      store_query_id INLINECALLDICT
+      s0 s8 XCHG2
+      STSLICER
+      s1 s4 XCHG
+      16 STU
+      s1 s3 XCHG
+      16 STU
+      s0 s5 XCHG2
+      STVARUINT16
+      SWAP
+      STVARUINT16
+      s1 s2 XCHG
+      STREF
+      s1 s2 XCHG
+      STREF
+      STREF
+      ENDC
+      NEWC
+      24 PUSHINT
+      store_msg_flags_and_address_none INLINECALLDICT
+      ROT
+      STSLICER
+      0 PUSHINT
+      STVARUINT16
+      -ROT
+      store_statinit_ref_and_body_ref INLINECALLDICT
+      ENDC
+      144 PUSHINT
+      SENDRAWMSG
+    }>
+    s6 POP
+    s6 PUSH
+    1358160295 PUSHINT
+    EQUAL
+    s7 PUSH
+    3547469196 PUSHINT
+    EQUAL
+    OR
+    s7 PUSH
+    3576854235 PUSHINT
+    EQUAL
+    OR
+    IFJMP:<{
+      11 BLKDROP
+    }>
+    s8 s4 XCPU
+    SDEQ
+    73 THROWIFNOT
+    s5 PUSH
+    982194641 PUSHINT
+    EQUAL
+    IFJMP:<{
+      s5 POP
+      2DROP
+      s5 POP
+      s5 POP
+      SWAP
+      LDVARUINT16
+      16 LDU
+      ENDS
+      DUP
+      200 PUSHINT
+      LEQ
+      83 THROWIFNOT
+      OVER
+      100000000000 PUSHINT
+      LEQ
+      83 THROWIFNOT
+      s3 s3 XCHG2
+      s0 s4 XCHG
+      s0 s5 XCHG
+      save_data INLINECALLDICT
+    }>
+    s5 PUSH
+    1694626644 PUSHINT
+    EQUAL
+    IFJMP:<{
+      s3 POP
+      s4 POP
+      s6 POP
+      s6 POP
+      s0 s2 XCHG
+      LDMSGADDR
+      ENDS
+      DUP
+      check_same_workchain INLINECALLDICT
+      s5 s3 s5 XCHG3
+      save_data INLINECALLDICT
+    }>
+    s3 s4 XCHG
+    4 BLKDROP
+    s3 POP
+    1189949076 PUSHINT
+    EQUAL
+    IFJMP:<{
+      LDVARUINT16
+      ENDS
+      2OVER
+      SUB
+      200000000 PUSHINT
+      SUB
+      MIN
+      DUP
+      0 GTINT
+      47 THROWIFNOT
+      2SWAP
+      SUB
+      SWAP
+      SUB
+      0 PUSHINT
+      RAWRESERVE
+      0 PUSHINT
+      DUP
+      NEWC
+      32 STU
+      x{466c6f653a207769746864726177} PUSHSLICE
+      STSLICER
+      ENDC
+      130 PUSHINT
+      send_simple INLINECALLDICT
+    }>
+    4 BLKDROP
+    16 PUSHPOW2DEC
+    THROWANY
+  }>
+  get_factory_data PROC:<{
+    load_data INLINECALLDICT
+  }>
+  get_token_address PROC:<{
+    load_data INLINECALLDICT
+    s1 s5 XCHG
+    5 BLKDROP
+    MYADDR
+    -ROT
+    calculate_token_state_init INLINECALLDICT
+    calculate_address_by_state_init INLINECALLDICT
+  }>
+}END>c

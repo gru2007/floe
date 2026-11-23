@@ -1,0 +1,388 @@
+;; Floe Token — jetton master with a built-in bonding curve.
+;;
+;; * Nobody (not the creator, not the platform) can mint: tokens appear only when
+;;   someone BUYS from the curve and disappear when someone SELLS (burns) back.
+;;   get_jetton_data returns admin = addr_none, mintable = true until max supply.
+;; * Price follows a constant-product curve with virtual reserves:
+;;     x = k / (Vj - S)  (TON side),   y = Vj - S  (token side),   k = Vt * Vj
+;;   Vt / Vj / max_supply are chosen by the creator at launch and are immutable.
+;; * Every trade emits an external "trade" log; the mini app reads these logs from
+;;   a public indexer to draw candles, so no backend is needed.
+;; * Rounding always favours the contract, and the TON reserve is tracked
+;;   explicitly, so the curve can always pay every holder back.
+;;
+;; storage (after init):
+;;   inited:1 factory:MsgAddressInt index:uint64
+;;   supply:Coins reserve:Coins fees_creator:Coins fees_platform:Coins
+;;   ^[ creator:MsgAddressInt creator_fee_bps:uint16 platform_fee_bps:uint16 created_at:uint32
+;;      ^[ vt:Coins vj:Coins max_supply:Coins max_buy:Coins ] ]
+;;   ^content ^jetton_wallet_code
+;; storage (before init): inited:1 = 0, factory, index
+
+#pragma version >=0.4.4;
+
+#include "imports/stdlib.fc";
+#include "imports/constants.fc";
+#include "imports/utils.fc";
+
+global int   st::inited;
+global slice st::factory;
+global int   st::index;
+global int   st::supply;
+global int   st::reserve;
+global int   st::fees_creator;
+global int   st::fees_platform;
+global slice st::creator;
+global int   st::creator_fee_bps;
+global int   st::platform_fee_bps;
+global int   st::created_at;
+global int   st::vt;
+global int   st::vj;
+global int   st::max_supply;
+global int   st::max_buy;
+global cell  st::content;
+global cell  st::wallet_code;
+
+() load_data() impure inline {
+    slice ds = get_data().begin_parse();
+    st::inited = ds~load_uint(1);
+    st::factory = ds~load_msg_addr();
+    st::index = ds~load_uint(64);
+    if (st::inited) {
+        st::supply = ds~load_coins();
+        st::reserve = ds~load_coins();
+        st::fees_creator = ds~load_coins();
+        st::fees_platform = ds~load_coins();
+        slice ps = ds~load_ref().begin_parse();
+        st::content = ds~load_ref();
+        st::wallet_code = ds~load_ref();
+        st::creator = ps~load_msg_addr();
+        st::creator_fee_bps = ps~load_uint(16);
+        st::platform_fee_bps = ps~load_uint(16);
+        st::created_at = ps~load_uint(32);
+        slice cs = ps~load_ref().begin_parse();
+        st::vt = cs~load_coins();
+        st::vj = cs~load_coins();
+        st::max_supply = cs~load_coins();
+        st::max_buy = cs~load_coins();
+    }
+}
+
+() save_data() impure inline {
+    set_data(begin_cell()
+        .store_uint(1, 1)
+        .store_slice(st::factory)
+        .store_uint(st::index, 64)
+        .store_coins(st::supply)
+        .store_coins(st::reserve)
+        .store_coins(st::fees_creator)
+        .store_coins(st::fees_platform)
+        .store_ref(begin_cell()
+            .store_slice(st::creator)
+            .store_uint(st::creator_fee_bps, 16)
+            .store_uint(st::platform_fee_bps, 16)
+            .store_uint(st::created_at, 32)
+            .store_ref(begin_cell()
+                .store_coins(st::vt)
+                .store_coins(st::vj)
+                .store_coins(st::max_supply)
+                .store_coins(st::max_buy)
+                .end_cell())
+            .end_cell())
+        .store_ref(st::content)
+        .store_ref(st::wallet_code)
+        .end_cell());
+}
+
+;; ---------------- curve math ----------------
+
+int ceil_div(int a, int b) inline {
+    return - ((- a) / b); ;; FunC `/` floors toward -inf
+}
+
+;; tokens received for `net_in` TON (after fees) when current supply is `supply`
+int curve_tokens_out(int supply, int net_in) inline {
+    int k = st::vt * st::vj;
+    int y = st::vj - supply;
+    int x = k / y;
+    int y_new = ceil_div(k, x + net_in);
+    return y_new >= y ? 0 : y - y_new;
+}
+
+;; TON (before fees) paid for `amount` tokens returned to the curve
+int curve_ton_out(int supply, int amount) inline {
+    int k = st::vt * st::vj;
+    int y = st::vj - supply;
+    int x = k / y;
+    int x_new = ceil_div(k, y + amount);
+    return x_new >= x ? 0 : x - x_new;
+}
+
+(int, int) split_fees(int amount) inline {
+    return (muldiv(amount, st::creator_fee_bps, BPS), muldiv(amount, st::platform_fee_bps, BPS));
+}
+
+;; ---------------- messages ----------------
+
+() emit_trade(int is_buy, slice trader, int ton_amount, int jetton_amount, int fee) impure inline {
+    emit_log(event::trade, begin_cell()
+        .store_uint(event::trade, 32)
+        .store_uint(is_buy, 1)
+        .store_slice(trader)
+        .store_coins(ton_amount)       ;; TON in (buy, incl. fees) / TON out (sell, after fees)
+        .store_coins(jetton_amount)
+        .store_coins(fee)
+        .store_coins(st::supply)       ;; after trade
+        .store_coins(st::reserve)      ;; after trade
+        .store_uint(now(), 32)
+        .end_cell());
+}
+
+() send_refund(slice to, int query_id, int reason, int keep_on_balance) impure inline {
+    raw_reserve(keep_on_balance, RESERVE_REGULAR);
+    send_simple(to, 0, begin_cell()
+        .store_op(op::refund)
+        .store_query_id(query_id)
+        .store_uint(reason, 8)
+        .end_cell(), SEND_MODE_CARRY_ALL_BALANCE | SEND_MODE_IGNORE_ERRORS);
+}
+
+() mint_to(slice owner, int amount, int query_id) impure inline {
+    cell state_init = calculate_jetton_wallet_state_init(owner, my_address(), st::wallet_code);
+    slice wallet = calculate_address_by_state_init(state_init);
+    cell body = begin_cell()
+        .store_op(op::internal_transfer)
+        .store_query_id(query_id)
+        .store_coins(amount)
+        .store_slice(my_address())   ;; from
+        .store_slice(owner)          ;; response_destination: excess gas goes back to the buyer
+        .store_coins(0)              ;; forward_ton_amount
+        .store_uint(0, 1)            ;; empty forward payload
+        .end_cell();
+    send_raw_message(begin_cell()
+        .store_msg_flags_and_address_none(BOUNCEABLE)
+        .store_slice(wallet)
+        .store_coins(0)
+        .store_statinit_ref_and_body_ref(state_init, body)
+        .end_cell(), SEND_MODE_CARRY_ALL_BALANCE | SEND_MODE_BOUNCE_ON_ACTION_FAIL);
+}
+
+;; `ton_in` is the part of the incoming value that goes into the trade (fees included).
+;; `keep_extra` is TON that must stay on the contract besides `ton_in` (storage deposit on init).
+() do_buy(slice buyer, int ton_in, int min_out, int query_id, int my_balance, int msg_value, int keep_extra) impure inline {
+    int base_balance = my_balance - msg_value + keep_extra;
+    (int fee_c, int fee_p) = split_fees(ton_in);
+    int net_in = ton_in - fee_c - fee_p;
+    int tokens = curve_tokens_out(st::supply, net_in);
+
+    if ((tokens == 0) | (tokens < min_out)) {
+        return send_refund(buyer, query_id, refund::slippage, base_balance);
+    }
+    if (st::supply + tokens > st::max_supply) {
+        return send_refund(buyer, query_id, refund::max_supply, base_balance);
+    }
+    if ((st::max_buy > 0) & (tokens > st::max_buy)) {
+        return send_refund(buyer, query_id, refund::max_buy, base_balance);
+    }
+
+    st::supply += tokens;
+    st::reserve += net_in;
+    st::fees_creator += fee_c;
+    st::fees_platform += fee_p;
+    save_data();
+
+    raw_reserve(base_balance + ton_in, RESERVE_REGULAR);
+    emit_trade(1, buyer, ton_in, tokens, fee_c + fee_p);
+    mint_to(buyer, tokens, query_id);
+}
+
+() do_sell(slice seller, slice pay_to, int amount, int min_out, int my_balance, int msg_value) impure inline {
+    throw_unless(error::not_enough_gas, msg_value >= SELL_MIN_VALUE);
+    throw_unless(error::balance_error, (amount > 0) & (amount <= st::supply));
+    int gross = min(curve_ton_out(st::supply, amount), st::reserve);
+    (int fee_c, int fee_p) = split_fees(gross);
+    int net_out = gross - fee_c - fee_p;
+    ;; throwing bounces burn_notification and the wallet restores the balance
+    throw_unless(error::not_enough_ton, (net_out > 0) & (net_out >= min_out));
+
+    st::supply -= amount;
+    st::reserve -= gross;
+    st::fees_creator += fee_c;
+    st::fees_platform += fee_p;
+    save_data();
+
+    raw_reserve(my_balance - msg_value - net_out, RESERVE_REGULAR);
+    emit_trade(0, seller, net_out, amount, fee_c + fee_p);
+    send_simple(pay_to, 0, begin_cell()
+        .store_uint(0, 32)
+        .store_slice("Floe: sell proceeds")
+        .end_cell(), SEND_MODE_CARRY_ALL_BALANCE | SEND_MODE_IGNORE_ERRORS);
+}
+
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    slice cs = in_msg_full.begin_parse();
+    int msg_flags = cs~load_msg_flags();
+    load_data();
+
+    if (msg_flags & 1) {
+        ;; a mint bounced: tokens were never delivered, remove them from supply.
+        ;; The TON stays in the reserve as surplus (makes the curve over-collateralised).
+        in_msg_body~skip_bounced_prefix();
+        if (in_msg_body~load_op() == op::internal_transfer) {
+            in_msg_body~skip_query_id();
+            st::supply -= in_msg_body~load_coins();
+            save_data();
+        }
+        return ();
+    }
+
+    slice sender = cs~load_msg_addr();
+    if (in_msg_body.slice_bits() < 32) {
+        return (); ;; plain TON: donation to the curve / storage top-up
+    }
+    (int op, int query_id) = in_msg_body~load_op_and_query_id();
+
+    if (op == op::init_token) {
+        throw_unless(error::already_initialized, st::inited == 0);
+        throw_unless(error::not_factory, equal_slices_bits(sender, st::factory));
+        st::creator = in_msg_body~load_msg_addr();
+        st::creator_fee_bps = in_msg_body~load_uint(16);
+        st::platform_fee_bps = in_msg_body~load_uint(16);
+        int dev_buy = in_msg_body~load_coins();
+        int min_out = in_msg_body~load_coins();
+        slice curve = in_msg_body~load_ref().begin_parse();
+        st::content = in_msg_body~load_ref();
+        st::wallet_code = in_msg_body~load_ref();
+        st::vt = curve~load_coins();
+        st::vj = curve~load_coins();
+        st::max_supply = curve~load_coins();
+        st::max_buy = curve~load_coins();
+        st::supply = 0;
+        st::reserve = 0;
+        st::fees_creator = 0;
+        st::fees_platform = 0;
+        st::created_at = now();
+        st::inited = 1;
+        save_data();
+
+        ;; Optional creator ("dev") buy of an explicit size; the factory checked the value.
+        if (dev_buy) {
+            return do_buy(st::creator, dev_buy, min_out, query_id, my_balance, msg_value, TOKEN_STORAGE_DEPOSIT);
+        }
+        raw_reserve(my_balance - msg_value + TOKEN_STORAGE_DEPOSIT, RESERVE_AT_MOST);
+        send_simple(st::creator, 0, begin_cell().store_op(op::excesses).store_query_id(query_id).end_cell(),
+            SEND_MODE_CARRY_ALL_BALANCE | SEND_MODE_IGNORE_ERRORS);
+        return ();
+    }
+
+    throw_unless(error::not_initialized, st::inited);
+
+    if (op == op::buy) {
+        int min_out = in_msg_body~load_coins();
+        int ton_in = msg_value - BUY_GAS;
+        throw_unless(error::not_enough_ton, ton_in >= MIN_TRADE);
+        return do_buy(sender, ton_in, min_out, query_id, my_balance, msg_value, 0);
+    }
+
+    if (op == op::burn_notification) {
+        int amount = in_msg_body~load_coins();
+        slice from = in_msg_body~load_msg_addr();
+        slice response = in_msg_body~load_msg_addr();
+        cell custom = in_msg_body~load_maybe_ref();
+        throw_unless(error::not_valid_wallet,
+            equal_slices_bits(calculate_user_jetton_wallet_address(from, my_address(), st::wallet_code), sender));
+        int min_out = 0;
+        ifnot (cell_null?(custom)) {
+            slice cps = custom.begin_parse();
+            min_out = cps~load_coins();
+        }
+        slice pay_to = is_address_none(response) ? from : response;
+        return do_sell(from, pay_to, amount, min_out, my_balance, msg_value);
+    }
+
+    if (op == op::claim_fees) {
+        ;; anyone may trigger; money always goes to the creator and to the factory
+        throw_unless(error::not_enough_gas, msg_value >= 20000000);
+        int fc = st::fees_creator;
+        int fp = st::fees_platform;
+        throw_unless(error::balance_error, my_balance - msg_value - fc - fp >= st::reserve);
+        st::fees_creator = 0;
+        st::fees_platform = 0;
+        save_data();
+        raw_reserve(my_balance - msg_value - fc - fp, RESERVE_REGULAR);
+        if (fc) {
+            send_simple(st::creator, fc, begin_cell().store_op(op::creator_fee).store_query_id(query_id).end_cell(),
+                SEND_MODE_PAY_FEES_SEPARATELY);
+        }
+        if (fp) {
+            send_simple(st::factory, fp, begin_cell().store_op(op::platform_fee).store_query_id(query_id).end_cell(),
+                SEND_MODE_PAY_FEES_SEPARATELY);
+        }
+        send_simple(sender, 0, begin_cell().store_op(op::excesses).store_query_id(query_id).end_cell(),
+            SEND_MODE_CARRY_ALL_BALANCE | SEND_MODE_IGNORE_ERRORS);
+        return ();
+    }
+
+    if (op == op::provide_wallet_address) {
+        ;; TEP-89
+        throw_unless(error::not_enough_gas, msg_value > 10000000);
+        slice owner = in_msg_body~load_msg_addr();
+        int include_address? = in_msg_body~load_uint(1);
+        (int wc, _) = parse_std_addr(owner);
+        cell included = include_address? ? begin_cell().store_slice(owner).end_cell() : null();
+        builder body = begin_cell().store_op(op::take_wallet_address).store_query_id(query_id);
+        if (wc == MY_WORKCHAIN) {
+            body = body.store_slice(calculate_user_jetton_wallet_address(owner, my_address(), st::wallet_code));
+        } else {
+            body = body.store_uint(0, 2);
+        }
+        send_simple(sender, 0, body.store_maybe_ref(included).end_cell(), SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE);
+        return ();
+    }
+
+    if (op == op::top_up) {
+        return ();
+    }
+
+    throw(error::wrong_op);
+}
+
+;; ---------------- get methods ----------------
+
+(int, int, slice, cell, cell) get_jetton_data() method_id {
+    load_data();
+    throw_unless(error::not_initialized, st::inited);
+    return (st::supply, st::supply < st::max_supply ? -1 : 0, address_none(), st::content, st::wallet_code);
+}
+
+slice get_wallet_address(slice owner) method_id {
+    load_data();
+    return calculate_user_jetton_wallet_address(owner, my_address(), st::wallet_code);
+}
+
+;; Everything the UI needs in one call.
+(int, slice, int, slice, int, int, int, int, int, int, int, int, int, int, int) get_token_data() method_id {
+    load_data();
+    throw_unless(error::not_initialized, st::inited);
+    return (
+        st::inited, st::factory, st::index, st::creator,
+        st::supply, st::reserve,
+        st::vt, st::vj, st::max_supply, st::max_buy,
+        st::creator_fee_bps, st::platform_fee_bps,
+        st::fees_creator, st::fees_platform, st::created_at
+    );
+}
+
+;; ton_in = TON going into the trade (what the UI shows as "you pay", without BUY_GAS)
+(int, int) get_buy_quote(int ton_in) method_id {
+    load_data();
+    (int fee_c, int fee_p) = split_fees(ton_in);
+    return (curve_tokens_out(st::supply, ton_in - fee_c - fee_p), fee_c + fee_p);
+}
+
+(int, int) get_sell_quote(int amount) method_id {
+    load_data();
+    int gross = min(curve_ton_out(st::supply, amount), st::reserve);
+    (int fee_c, int fee_p) = split_fees(gross);
+    return (gross - fee_c - fee_p, fee_c + fee_p);
+}
