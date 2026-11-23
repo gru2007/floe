@@ -17,9 +17,9 @@
     },
     "mainnet": {
       "factories": [
-        "EQAOr5GTmswKLU1FzSzo5IyZA0Pn4XZmhj8M55yQJyUM6fW1"
+        "EQCY9EqIN0lW-Qmj6Wfp6wJJuZjlNBPozuBj2iFejDtJ0l7T"
       ],
-      "activeFactory": "EQAOr5GTmswKLU1FzSzo5IyZA0Pn4XZmhj8M55yQJyUM6fW1"
+      "activeFactory": "EQCY9EqIN0lW-Qmj6Wfp6wJJuZjlNBPozuBj2iFejDtJ0l7T"
     }
   }
 }
