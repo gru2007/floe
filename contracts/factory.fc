@@ -7,10 +7,10 @@
 ;; Token addresses depend only on (factory, index), so the mini app enumerates all
 ;; tokens with get_token_address(0..next_index-1) — no server, no indexer needed.
 ;; Token code is fixed at deploy of the factory (no set_code): for a new version
-;; deploy a new factory and add its address to the mini app config.
+;; deploy a new factory, retire the old one and change activeFactory in the app config.
 ;;
 ;; storage#_ owner:MsgAddressInt deploy_fee:Coins platform_fee_bps:uint16 next_index:uint64
-;;           token_code:^Cell wallet_code:^Cell = Storage;
+;;           token_code:^Cell wallet_code:^Cell creation_enabled:1 next_factory:MsgAddress = Storage;
 
 #pragma version >=0.4.4;
 
@@ -20,14 +20,17 @@
 
 const FACTORY_MIN_BALANCE = 200000000; ;; 0.2 TON always stays for storage
 
-(slice, int, int, int, cell, cell) load_data() inline {
+(slice, int, int, int, cell, cell, int, slice) load_data() inline {
     slice ds = get_data().begin_parse();
-    var data = (ds~load_msg_addr(), ds~load_coins(), ds~load_uint(16), ds~load_uint(64), ds~load_ref(), ds~load_ref());
+    (slice owner, int fee, int bps, int index, cell token_code, cell wallet_code) =
+        (ds~load_msg_addr(), ds~load_coins(), ds~load_uint(16), ds~load_uint(64), ds~load_ref(), ds~load_ref());
+    int enabled = ds.slice_bits() ? ds~load_uint(1) : 1;
+    slice successor = ds.slice_bits() ? ds~load_msg_addr() : begin_cell().store_uint(0, 2).end_cell().begin_parse();
     ds.end_parse();
-    return data;
+    return (owner, fee, bps, index, token_code, wallet_code, enabled, successor);
 }
 
-() save_data(slice owner, int deploy_fee, int platform_fee_bps, int next_index, cell token_code, cell wallet_code) impure inline {
+() save_data(slice owner, int deploy_fee, int platform_fee_bps, int next_index, cell token_code, cell wallet_code, int enabled, slice successor) impure inline {
     set_data(begin_cell()
         .store_slice(owner)
         .store_coins(deploy_fee)
@@ -35,6 +38,8 @@ const FACTORY_MIN_BALANCE = 200000000; ;; 0.2 TON always stays for storage
         .store_uint(next_index, 64)
         .store_ref(token_code)
         .store_ref(wallet_code)
+        .store_uint(enabled, 1)
+        .store_slice(successor)
         .end_cell());
 }
 
@@ -62,9 +67,10 @@ const FACTORY_MIN_BALANCE = 200000000; ;; 0.2 TON always stays for storage
         return ();
     }
     (int op, int query_id) = in_msg_body~load_op_and_query_id();
-    (slice owner, int deploy_fee, int platform_fee_bps, int next_index, cell token_code, cell wallet_code) = load_data();
+    (slice owner, int deploy_fee, int platform_fee_bps, int next_index, cell token_code, cell wallet_code, int enabled, slice successor) = load_data();
 
     if (op == op::create_token) {
+        throw_unless(error::factory_retired, enabled);
         check_same_workchain(sender);
         int creator_fee_bps = in_msg_body~load_uint(16);
         int dev_buy = in_msg_body~load_coins();
@@ -86,7 +92,7 @@ const FACTORY_MIN_BALANCE = 200000000; ;; 0.2 TON always stays for storage
         throw_unless(error::content_too_big, bits <= MAX_CONTENT_BITS);
 
         int index = next_index;
-        save_data(owner, deploy_fee, platform_fee_bps, next_index + 1, token_code, wallet_code);
+        save_data(owner, deploy_fee, platform_fee_bps, next_index + 1, token_code, wallet_code, enabled, successor);
 
         cell state_init = calculate_token_state_init(my_address(), index, token_code);
         slice token = calculate_address_by_state_init(state_init);
@@ -129,13 +135,26 @@ const FACTORY_MIN_BALANCE = 200000000; ;; 0.2 TON always stays for storage
 
     throw_unless(error::not_owner, equal_slices_bits(sender, owner));
 
+    if (op == op::retire_factory) {
+        throw_unless(error::factory_retired, enabled);
+        slice next = in_msg_body~load_msg_addr();
+        in_msg_body.end_parse();
+        check_same_workchain(next);
+        throw_unless(error::bad_params, ~ equal_slices_bits(next, my_address()));
+        save_data(owner, deploy_fee, platform_fee_bps, next_index, token_code, wallet_code, 0, next);
+        raw_reserve(my_balance - msg_value, RESERVE_REGULAR);
+        send_simple(sender, 0, begin_cell().store_op(op::excesses).store_query_id(query_id).end_cell(),
+            SEND_MODE_CARRY_ALL_BALANCE | SEND_MODE_IGNORE_ERRORS);
+        return ();
+    }
+
     if (op == op::set_config) {
         int new_deploy_fee = in_msg_body~load_coins();
         int new_fee_bps = in_msg_body~load_uint(16);
         in_msg_body.end_parse();
         throw_unless(error::bad_params, new_fee_bps <= MAX_PLATFORM_FEE_BPS);
         throw_unless(error::bad_params, new_deploy_fee <= 100 * ONE_TON);
-        save_data(owner, new_deploy_fee, new_fee_bps, next_index, token_code, wallet_code);
+        save_data(owner, new_deploy_fee, new_fee_bps, next_index, token_code, wallet_code, enabled, successor);
         return ();
     }
 
@@ -143,7 +162,7 @@ const FACTORY_MIN_BALANCE = 200000000; ;; 0.2 TON always stays for storage
         slice new_owner = in_msg_body~load_msg_addr();
         in_msg_body.end_parse();
         check_same_workchain(new_owner);
-        save_data(new_owner, deploy_fee, platform_fee_bps, next_index, token_code, wallet_code);
+        save_data(new_owner, deploy_fee, platform_fee_bps, next_index, token_code, wallet_code, enabled, successor);
         return ();
     }
 
@@ -162,11 +181,11 @@ const FACTORY_MIN_BALANCE = 200000000; ;; 0.2 TON always stays for storage
     throw(error::wrong_op);
 }
 
-(slice, int, int, int, cell, cell) get_factory_data() method_id {
+(slice, int, int, int, cell, cell, int, slice) get_factory_data() method_id {
     return load_data();
 }
 
 slice get_token_address(int index) method_id {
-    (_, _, _, _, cell token_code, _) = load_data();
+    (_, _, _, _, cell token_code, _, _, _) = load_data();
     return calculate_address_by_state_init(calculate_token_state_init(my_address(), index, token_code));
 }

@@ -1,5 +1,7 @@
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
-import { Address, beginCell, Cell, toNano } from '@ton/core';
+import { Address, beginCell, Cell, contractAddress, internal, SendMode, toNano } from '@ton/core';
+import { WalletContractV4, WalletContractV5R1 } from '@ton/ton';
+import { keyPairFromSeed } from '@ton/crypto';
 import { compile } from '@ton/blueprint';
 import '@ton/test-utils';
 import { Factory } from '../wrappers/Factory';
@@ -10,6 +12,7 @@ import {
     buyBody,
     CurveParams,
     createTokenValue,
+    createTokenBody,
     designCurve,
     Errors,
     Event,
@@ -100,10 +103,10 @@ describe('Floe memepad', () => {
             from: token.address, to: wallet.address, op: Op.internalTransfer, success: true,
             body: beginCell().storeUint(Op.internalTransfer, 32).storeUint(queryId, 64)
                 .storeCoins(amount).storeAddress(token.address).storeAddress(recipient)
-                .storeCoins(1n).storeBit(false).endCell(),
+                .storeCoins(Limits.MINT_FORWARD_TON).storeBit(false).endCell(),
         });
         expect(res.transactions).toHaveTransaction({
-            from: wallet.address, to: recipient, op: Op.transferNotification, value: 1n,
+            from: wallet.address, to: recipient, op: Op.transferNotification, value: Limits.MINT_FORWARD_TON,
             body: beginCell().storeUint(Op.transferNotification, 32).storeUint(queryId, 64)
                 .storeCoins(amount).storeAddress(token.address).storeBit(false).endCell(),
         });
@@ -176,6 +179,126 @@ describe('Floe memepad', () => {
         await expectMintNotification(res, token, alice.address, q.tokens, queryId);
         expect(await (await walletOf(token, alice.address)).getJettonBalance()).toBe(q.tokens);
         expect((await token.getJettonData()).totalSupply).toBe(q.tokens);
+    });
+
+    it.each(['V4', 'V5'] as const)('mint notification executes successfully on a normal %s wallet', async (version) => {
+        // A treasury accepts tiny messages differently; use the actual wallet code from production.
+        const keys = keyPairFromSeed(Buffer.alloc(32, version === 'V4' ? 4 : 5));
+        const receiver = bc.openContract(version === 'V4'
+            ? WalletContractV4.create({ workchain: 0, publicKey: keys.publicKey })
+            : WalletContractV5R1.create({ publicKey: keys.publicKey }));
+        await owner.sendMessages([internal({ to: receiver.address, value: toNano('10'), init: receiver.init })]);
+        const { token } = await createToken();
+        const tonIn = toNano('0.1171'); // same size as the purchase that showed cskip_no_gas
+        const expected = quoteBuy(curve, fees, 0n, tonIn).tokens;
+        const res = await receiver.sendTransfer({
+            seqno: await receiver.getSeqno(), secretKey: keys.secretKey,
+            sendMode: SendMode.PAY_GAS_SEPARATELY | SendMode.IGNORE_ERRORS,
+            messages: [internal({ to: token.address, value: tonIn + Limits.BUY_GAS, body: buyBody(expected) })],
+        });
+        const wallet = await walletOf(token, receiver.address);
+        expect(res.transactions).toHaveTransaction({
+            from: wallet.address, to: receiver.address, op: Op.transferNotification, success: true,
+        });
+        expect(await wallet.getJettonBalance()).toBe(expected);
+        expect((await token.getJettonData()).totalSupply).toBe(expected);
+        const minimum = toNano('0.01');
+        const nextExpected = quoteBuy(curve, fees, expected, minimum).tokens;
+        const repeated = await receiver.sendTransfer({
+            seqno: await receiver.getSeqno(), secretKey: keys.secretKey,
+            sendMode: SendMode.PAY_GAS_SEPARATELY | SendMode.IGNORE_ERRORS,
+            messages: [internal({ to: token.address, value: minimum + Limits.BUY_GAS, body: buyBody(nextExpected) })],
+        });
+        expect(repeated.transactions).toHaveTransaction({ from: wallet.address, to: receiver.address, op: Op.transferNotification, success: true });
+        expect(await wallet.getJettonBalance()).toBe(expected + nextExpected);
+    });
+
+    it.each(['V4', 'V5'] as const)('creator first buy notification also executes on a normal %s wallet', async (version) => {
+        const keys = keyPairFromSeed(Buffer.alloc(32, version === 'V4' ? 14 : 15));
+        const receiver = bc.openContract(version === 'V4'
+            ? WalletContractV4.create({ workchain: 0, publicKey: keys.publicKey })
+            : WalletContractV5R1.create({ publicKey: keys.publicKey }));
+        await owner.sendMessages([internal({ to: receiver.address, value: toNano('10'), init: receiver.init })]);
+        const devBuy = toNano('0.01');
+        const expected = quoteBuy(curve, fees, 0n, devBuy).tokens;
+        const res = await receiver.sendTransfer({
+            seqno: await receiver.getSeqno(), secretKey: keys.secretKey,
+            sendMode: SendMode.PAY_GAS_SEPARATELY | SendMode.IGNORE_ERRORS,
+            messages: [internal({ to: factory.address, value: createTokenValue(DEPLOY_FEE, devBuy),
+                body: createTokenBody({ creatorFeeBps: CREATOR_FEE_BPS, devBuy, minOut: expected, curve, content: meta() }) })],
+        });
+        const token = bc.openContract(Token.createFromAddress(await factory.getTokenAddress(0n)));
+        const wallet = await walletOf(token, receiver.address);
+        expect(res.transactions).toHaveTransaction({ from: wallet.address, to: receiver.address, op: Op.transferNotification, success: true });
+        expect(await wallet.getJettonBalance()).toBe(expected);
+    });
+
+    it('retires token creation irreversibly while old tokens trade and a successor creates', async () => {
+        const { token } = await createToken();
+        await token.sendBuy(alice.getSender(), toNano('10'));
+        const next = bc.openContract(Factory.createFromConfig({
+            owner: owner.address, deployFee: DEPLOY_FEE + 1n, platformFeeBps: PLATFORM_FEE_BPS, tokenCode, walletCode,
+        }, factoryCode));
+        await next.sendDeploy(owner.getSender(), toNano('1'));
+        let res = await factory.sendRetire(alice.getSender(), next.address);
+        expect(res.transactions).toHaveTransaction({ to: factory.address, success: false, exitCode: Errors.notOwner });
+        res = await factory.sendRetire(owner.getSender(), factory.address);
+        expect(res.transactions).toHaveTransaction({ to: factory.address, success: false, exitCode: Errors.badParams });
+        await factory.sendRetire(owner.getSender(), next.address);
+        const data = await factory.getFactoryData();
+        expect(data.creationEnabled).toBe(false);
+        expect(data.migrationSupported).toBe(true);
+        expect(data.nextFactory!.equals(next.address)).toBe(true);
+        expect((await factory.getTokenAddress(0n)).equals(token.address)).toBe(true);
+        const parsed = parseFactoryData(((await bc.getContract(factory.address)).accountState as any).state.data);
+        expect(parsed.creationEnabled).toBe(false);
+        expect(parsed.nextFactory!.equals(next.address)).toBe(true);
+        const params = { creatorFeeBps: CREATOR_FEE_BPS, devBuy: 0n, minOut: 0n, curve, content: meta() };
+        res = await factory.sendCreateToken(creator.getSender(), createTokenValue(DEPLOY_FEE, 0n), params);
+        expect(res.transactions).toHaveTransaction({ to: factory.address, success: false, exitCode: Errors.factoryRetired });
+        expect((await factory.getFactoryData()).nextIndex).toBe(1n);
+        await factory.sendSetConfig(owner.getSender(), 0n, 0);
+        expect((await factory.getFactoryData()).creationEnabled).toBe(false);
+        res = await factory.sendRetire(owner.getSender(), bob.address);
+        expect(res.transactions).toHaveTransaction({ to: factory.address, success: false, exitCode: Errors.factoryRetired });
+        res = await token.sendBuy(bob.getSender(), toNano('1'));
+        expect(res.transactions).toHaveTransaction({ from: bob.address, to: token.address, success: true });
+        const aliceWallet = await walletOf(token, alice.address);
+        res = await aliceWallet.sendSell(alice.getSender(), { amount: await aliceWallet.getJettonBalance() });
+        expect(res.transactions).toHaveTransaction({ from: aliceWallet.address, to: token.address, success: true });
+        res = await token.sendClaimFees(bob.getSender());
+        expect(res.transactions).toHaveTransaction({ from: token.address, to: factory.address, op: Op.platformFee, success: true });
+        res = await factory.sendWithdraw(owner.getSender(), toNano('0.01'));
+        expect(res.transactions).toHaveTransaction({ from: factory.address, to: owner.address, success: true });
+        expect((await factory.getFactoryData()).creationEnabled).toBe(false);
+        res = await next.sendCreateToken(creator.getSender(), createTokenValue(DEPLOY_FEE + 1n, 0n), params);
+        expect(res.transactions).toHaveTransaction({ from: next.address, to: await next.getTokenAddress(0n), deploy: true, success: true });
+        expect((await next.getFactoryData()).nextIndex).toBe(1n);
+    });
+
+    it('reads and uses a deployed v1 factory without pretending it supports retirement', async () => {
+        // Frozen pre-migration bytecode, so this really exercises the old six-item getter and storage.
+        const code = Cell.fromBoc(Buffer.from(require('./fixtures/factory-v1.compiled.json').hex, 'hex'))[0];
+        const data = beginCell().storeAddress(owner.address).storeCoins(DEPLOY_FEE).storeUint(PLATFORM_FEE_BPS, 16)
+            .storeUint(0, 64).storeRef(tokenCode).storeRef(walletCode).endCell();
+        const legacy = bc.openContract(new Factory(contractAddress(0, { code, data }), { code, data }));
+        await legacy.sendDeploy(owner.getSender(), toNano('1'));
+        const parsed = parseFactoryData(data);
+        const getter = await legacy.getFactoryData();
+        expect(parsed.migrationSupported).toBe(false);
+        expect(getter.migrationSupported).toBe(false);
+        expect(parsed.creationEnabled).toBe(true);
+        expect(getter.creationEnabled).toBe(true);
+        expect(getter.nextFactory).toBeNull();
+        const res = await legacy.sendCreateToken(creator.getSender(), createTokenValue(DEPLOY_FEE, 0n), {
+            creatorFeeBps: CREATOR_FEE_BPS, devBuy: 0n, minOut: 0n, curve, content: meta(),
+        });
+        expect(res.transactions).toHaveTransaction({ from: legacy.address, to: await legacy.getTokenAddress(0n), deploy: true, success: true });
+        const oldToken = bc.openContract(Token.createFromAddress(await legacy.getTokenAddress(0n)));
+        await oldToken.sendBuy(alice.getSender(), toNano('1'));
+        expect(await (await walletOf(oldToken, alice.address)).getJettonBalance()).toBeGreaterThan(0n);
+        const denied = await legacy.sendRetire(owner.getSender(), factory.address);
+        expect(denied.transactions).toHaveTransaction({ to: legacy.address, success: false, exitCode: Errors.wrongOp });
     });
 
     it('notifies every purchase into an existing jetton wallet without double crediting', async () => {

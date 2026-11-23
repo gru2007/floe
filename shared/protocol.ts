@@ -16,6 +16,7 @@ export const Op = {
     setConfig: 0x3a8b19d1,
     changeOwner: 0x6501f354,
     withdraw: 0x46ed2e94,
+    retireFactory: 0x52455449,
     initToken: 0x5a1e7f02,
     buy: 0x1f3ad9b0,
     claimFees: 0x7c1f0e44,
@@ -40,6 +41,7 @@ export const Errors = {
     badParams: 83,
     contentTooBig: 84,
     notEnoughTon: 85,
+    factoryRetired: 86,
     wrongOp: 0xffff,
 } as const;
 
@@ -56,6 +58,7 @@ export const Limits = {
     MAX_CREATOR_FEE_BPS: 500,
     MAX_PLATFORM_FEE_BPS: 200,
     BUY_GAS: 50_000_000n, // 0.05 TON, unused part returns
+    MINT_FORWARD_TON: 10_000_000n, // returned to the buyer with transfer_notification
     SELL_VALUE: 60_000_000n, // attached to a burn (sell), unused part returns
     CLAIM_VALUE: 50_000_000n,
     TOKEN_STORAGE_DEPOSIT: 100_000_000n,
@@ -421,17 +424,25 @@ export interface FactoryState {
     nextIndex: bigint;
     tokenCode: Cell;
     walletCode: Cell;
+    migrationSupported: boolean;
+    creationEnabled: boolean;
+    nextFactory: Address | null;
 }
 
 export function parseFactoryData(data: Cell): FactoryState {
     const s = data.beginParse();
-    return {
+    const base = {
         owner: s.loadAddress(),
         deployFee: s.loadCoins(),
         platformFeeBps: s.loadUint(16),
         nextIndex: s.loadUintBig(64),
         tokenCode: s.loadRef(),
         walletCode: s.loadRef(),
+    };
+    const migrationSupported = s.remainingBits > 0;
+    return { ...base, migrationSupported,
+        creationEnabled: migrationSupported ? s.loadBit() : true,
+        nextFactory: migrationSupported ? s.loadMaybeAddress() : null,
     };
 }
 

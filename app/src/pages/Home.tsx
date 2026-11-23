@@ -158,6 +158,10 @@ export function Home() {
           <p>В сети {cfg.floe.network} ещё не подключена фабрика токенов. Создание и торговля станут доступны после её запуска.</p>
         </div>
       )}
+      {cfg.factories.length > 0 && !cfg.activeFactory && <div className="empty">
+        <b>Создание новых токенов приостановлено</b>
+        <p>Существующие токены остаются доступны для покупки, продажи и перевода.</p>
+      </div>}
       {error && <div className="empty -error">Не удалось загрузить данные из блокчейна: {error}</div>}
 
       <div className="token-list">

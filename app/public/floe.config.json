@@ -12,10 +12,14 @@
   "sourceUrl": "https://github.com/gru2007/floe",
   "networks": {
     "testnet": {
-      "factories": []
+      "factories": [],
+      "activeFactory": null
     },
     "mainnet": {
-      "factories": [ "EQAOr5GTmswKLU1FzSzo5IyZA0Pn4XZmhj8M55yQJyUM6fW1" ]
+      "factories": [
+        "EQAOr5GTmswKLU1FzSzo5IyZA0Pn4XZmhj8M55yQJyUM6fW1"
+      ],
+      "activeFactory": "EQAOr5GTmswKLU1FzSzo5IyZA0Pn4XZmhj8M55yQJyUM6fW1"
     }
   }
 }

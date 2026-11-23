@@ -17,11 +17,22 @@ export function Settings() {
     ])) as Record<Network, string>;
   });
   const [error, setError] = useState('');
+  const [active, setActive] = useState(() => {
+    const local = readNetworkSettings();
+    return Object.fromEntries((['testnet', 'mainnet'] as const).map((n) => {
+      const chosen = local.activeFactories?.[n] !== undefined ? local.activeFactories[n]
+        : cfg.floe.networks?.[n]?.activeFactory !== undefined ? cfg.floe.networks[n]!.activeFactory
+        : cfg.floe.network === n && cfg.floe.activeFactory !== undefined ? cfg.floe.activeFactory
+        : addresses[n].trim().split(/[\s,;]+/).filter(Boolean).slice(-1)[0];
+      return [n, chosen ?? ''];
+    })) as Record<Network, string>;
+  });
   const [busy, setBusy] = useState(false);
   const apply = async (reset = false) => {
     setError('');
     try {
       const factories: Partial<Record<Network, string[]>> = {};
+      const activeFactories: Partial<Record<Network, string | null>> = {};
       if (!reset) for (const n of ['testnet', 'mainnet'] as const) {
         factories[n] = [...new Set(addresses[n].split(/[\s,;]+/).filter(Boolean).map((a) => {
           try {
@@ -31,12 +42,24 @@ export function Settings() {
             return Address.parse(a).toString({ testOnly: n === 'testnet', bounceable: true });
           } catch { throw new Error(`Некорректный адрес фабрики для ${n}: ${a}`); }
         }))];
+        const selected = active[n].trim();
+        if (!selected) activeFactories[n] = null;
+        else {
+          let address: Address;
+          try {
+            if (n === 'mainnet' && Address.isFriendly(selected) && Address.parseFriendly(selected).isTestOnly) throw new Error('testnet');
+            address = Address.parse(selected);
+          } catch { throw new Error(`Некорректная активная фабрика для ${n}`); }
+          const normalized = address.toString({ testOnly: n === 'testnet', bounceable: true });
+          if (!factories[n]!.includes(normalized)) throw new Error(`Сначала добавьте активную фабрику в список ${n}`);
+          activeFactories[n] = normalized;
+        }
       }
       setBusy(true);
       // Disconnect before reload so a restored session cannot silently keep the old chain.
       if (ui.connected) await ui.disconnect();
       if (reset) resetNetworkSettings();
-      else saveNetworkSettings({ network, factories });
+      else saveNetworkSettings({ network, factories, activeFactories });
       window.location.reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -51,10 +74,14 @@ export function Settings() {
         {(['testnet', 'mainnet'] as const).map((n) => <button key={n} type="button" className={`btn ${network === n ? '' : '-secondary'}`} aria-pressed={network === n} onClick={() => setNetwork(n)}>{n === 'testnet' ? 'Testnet' : 'Mainnet'}</button>)}
       </div>
       <p className="muted">{network === 'testnet' ? 'Тестовая сеть. Нужны тестовые TON.' : 'Основная сеть. Операции используют настоящие TON.'}</p>
-      {(['testnet', 'mainnet'] as const).map((n) => <label className="field" key={n}>
-        <span>Фабрики {n} · по одному адресу в строке</span>
+      {(['testnet', 'mainnet'] as const).map((n) => <div key={n}><label className="field">
+        <span>Все фабрики {n} · включая старые</span>
         <textarea aria-label={`Фабрики ${n}`} value={addresses[n]} onChange={(e) => setAddresses({ ...addresses, [n]: e.target.value })} rows={3} placeholder="Адрес после развёртывания Factory" spellCheck={false} autoCapitalize="off" />
-      </label>)}
+      </label><label className="field">
+        <span>Активная фабрика {n} · только для создания</span>
+        <input aria-label={`Активная фабрика ${n}`} value={active[n]} onChange={(e) => setActive({ ...active, [n]: e.target.value })} placeholder="Пусто — создание отключено" spellCheck={false} autoCapitalize="off" />
+      </label></div>)}
+      <p className="muted">При миграции оставьте старые адреса в общем списке и укажите новую активную фабрику. Старые токены сохранят торговлю. Закрытие фабрики в блокчейне выполняется отдельно её владельцем.</p>
       {error && <p role="alert" className="down">{error}</p>}
       <p className="muted">При сохранении кошелёк отключится, а приложение перезагрузится. Подключите кошелёк в выбранной сети.</p>
       <button type="button" className="btn -wide" disabled={busy} onClick={() => void apply()}>Сохранить и перезагрузить</button>

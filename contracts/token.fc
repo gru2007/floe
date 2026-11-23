@@ -156,9 +156,8 @@ int curve_ton_out(int supply, int amount) inline {
         .store_coins(amount)
         .store_slice(my_address())   ;; from
         .store_slice(owner)          ;; response_destination: excess gas goes back to the buyer
-        .store_coins(1)              ;; 1 nanoTON: wallet emits TEP-74 transfer_notification to owner.
-                                    ;; TonAPI uses this child message to recognise a mint from a master
-                                    ;; even when the parent's buy opcode is application-specific.
+        .store_coins(MINT_FORWARD_TON) ;; Notification must execute on the owner's real wallet,
+                                      ;; not just exist with cskip_no_gas (as it did with 1 nanoTON).
         .store_uint(0, 1)            ;; empty forward payload
         .end_cell();
     send_raw_message(begin_cell()

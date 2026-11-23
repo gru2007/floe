@@ -60,7 +60,7 @@ export function About() {
           const a = fmtAddress(f, cfg.isTestnet);
           return (
             <div className="kv" key={a}>
-              <span>Фабрика</span>
+              <span>{cfg.activeFactory?.equals(f) ? 'Фабрика для создания' : 'Архивная фабрика'}</span>
               <a className="mono" href={`https://${cfg.isTestnet ? 'testnet.' : ''}tonviewer.com/${a}`} target="_blank" rel="noopener noreferrer">
                 {a.slice(0, 6)}…{a.slice(-6)} <IconExternal size={14} />
               </a>

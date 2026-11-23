@@ -24,4 +24,14 @@ describe('network isolation', () => {
   it('allows an empty local override to disable configured factories', () => {
     expect(resolveNetworkConfig(legacy, { factories: { testnet: [] } }).factories).toEqual([]);
   });
+  it('keeps active factories isolated by network, including an explicit null', () => {
+    const cfg = { ...legacy, activeFactory: 'test-factory', networks: {
+      testnet: { factories: ['old-test', 'new-test'], activeFactory: 'new-test' },
+      mainnet: { factories: ['old-main', 'new-main'], activeFactory: 'new-main' },
+    } };
+    expect(resolveNetworkConfig(cfg, { network: 'mainnet' }).activeFactory).toBe('new-main');
+    expect(resolveNetworkConfig(cfg, { network: 'mainnet', activeFactories: { mainnet: null } }).activeFactory).toBeNull();
+    expect(resolveNetworkConfig(cfg, { network: 'testnet', activeFactories: { mainnet: null } }).activeFactory).toBe('new-test');
+    expect(resolveNetworkConfig({ ...legacy, activeFactory: 'test-factory' }, { network: 'mainnet' }).activeFactory).toBeUndefined();
+  });
 });

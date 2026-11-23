@@ -16,6 +16,7 @@ import {
 } from '@shared/protocol';
 import { getAccountState, getAccountStates, getJettonWallets, getTransactions } from './api';
 import type { AppConfig } from './config';
+import { selectCreationFactory } from './factories';
 
 export interface TokenInfo {
   address: Address;
@@ -56,22 +57,29 @@ export const mcapOf = (s: TokenState) => priceOf(s) * (Number(s.maxSupply) / 1e9
 
 const factoryCache = new Map<string, { at: number; v: FactoryState }>();
 
-export async function loadFactories(cfg: AppConfig): Promise<{ address: Address; state: FactoryState }[]> {
+export async function loadFactories(cfg: AppConfig, maxAgeMs = 15_000): Promise<{ address: Address; state: FactoryState }[]> {
   if (cfg.factories.length === 0) return [];
   const fresh = cfg.factories.every((f) => {
     const c = factoryCache.get(f.toRawString());
-    return c && Date.now() - c.at < 15_000;
+    return c && Date.now() - c.at < maxAgeMs;
   });
   if (!fresh) {
     const states = await getAccountStates(cfg.factories);
     for (const f of cfg.factories) {
       const st = states.get(f.toRawString());
       if (st?.data) factoryCache.set(f.toRawString(), { at: Date.now(), v: parseFactoryData(st.data) });
+      else factoryCache.delete(f.toRawString());
     }
   }
   return cfg.factories
     .filter((f) => factoryCache.has(f.toRawString()))
     .map((f) => ({ address: f, state: factoryCache.get(f.toRawString())!.v }));
+}
+
+export async function loadCreationFactory(cfg: AppConfig) {
+  if (!cfg.activeFactory) return null;
+  return selectCreationFactory(cfg.activeFactory,
+    await loadFactories({ ...cfg, factories: [cfg.activeFactory] }, 0));
 }
 
 /** Newest tokens first, across all configured factories. Pure computation. */

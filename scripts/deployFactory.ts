@@ -4,7 +4,7 @@ import { Factory } from '../wrappers/Factory';
 
 /**
  * npx blueprint run deployFactory --testnet --tonconnect
- * After deploy put the printed address into app/public/floe.config.json -> networks.<network>.factories.
+ * After deploy put the printed address into app/public/floe.config.json -> networks.<network>.factories, and set activeFactory to it.
  */
 export async function run(provider: NetworkProvider) {
     const owner = provider.sender().address!;

@@ -1,5 +1,6 @@
 import { Address } from '@ton/core';
 import { readNetworkSettings, resolveNetworkConfig, type Network, type NetworkConfig } from './network-settings';
+import { creationFactoryAddress } from './factories';
 
 export interface AwConfig {
   id: string;
@@ -10,6 +11,7 @@ export interface FloeConfig {
   network: Network;
   networks?: Partial<Record<Network, NetworkConfig>>;
   factories: string[];
+  activeFactory?: string | null;
   toncenterApiKey?: string;
   /** optional: custom toncenter-v3 compatible endpoint */
   toncenterUrl?: string;
@@ -25,6 +27,7 @@ export interface AppConfig {
   aw: AwConfig;
   floe: FloeConfig;
   factories: Address[];
+  activeFactory: Address | null;
   hidden: Set<string>;
   isTestnet: boolean;
   appUrl: string;
@@ -61,6 +64,7 @@ export function loadConfig(): Promise<AppConfig> {
       aw,
       floe: { ...floe, blockedWords: (floe.blockedWords ?? []).map((w) => w.toLowerCase()) },
       factories,
+      activeFactory: creationFactoryAddress({ ...floe, factories: factories.map((f) => f.toRawString()) }),
       hidden,
       isTestnet: floe.network !== 'mainnet',
       appUrl,

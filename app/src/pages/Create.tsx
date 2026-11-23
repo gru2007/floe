@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Address } from '@ton/core';
 import { useTonAddress } from '@tonconnect/ui-react';
 import {
@@ -16,7 +16,7 @@ import {
 import { useConfig, useToast } from '../ctx';
 import { useAw } from '../aw';
 import { useSend } from '../tx';
-import { loadFactories, loadTokens } from '../lib/chain';
+import { loadCreationFactory, loadFactories, loadTokens } from '../lib/chain';
 import { createTx, slippageMin } from '../lib/tx';
 import { compressLogo, bytesToDataUrl } from '../lib/image';
 import { compact, formatPrice, toNanoSafe, ton } from '../lib/format';
@@ -46,6 +46,7 @@ export function Create() {
   const me = useTonAddress(false);
 
   const [factory, setFactory] = useState<{ address: Address; state: FactoryState } | null>(null);
+  const [loadingFactory, setLoadingFactory] = useState(true);
   const [name, setName] = useState('');
   const [symbol, setSymbol] = useState('');
   const [description, setDescription] = useState('');
@@ -64,9 +65,13 @@ export function Create() {
   const readOnly = useReadOnly();
 
   useEffect(() => {
-    loadFactories(cfg)
-      .then((f) => setFactory(f[f.length - 1] ?? null))
-      .catch(() => setFactory(null));
+    let alive = true;
+    setLoadingFactory(true);
+    loadCreationFactory(cfg)
+      .then((value) => { if (alive) setFactory(value); })
+      .catch(() => { if (alive) setFactory(null); })
+      .finally(() => { if (alive) setLoadingFactory(false); });
+    return () => { alive = false; };
   }, [cfg]);
 
   const curve: CurveParams | null = useMemo(() => {
@@ -111,7 +116,7 @@ export function Create() {
   if (devQuote && curve && devQuote.tokens > curve.maxSupply) errors.push('Первая покупка больше всей эмиссии');
   if (devQuote && curve && curve.maxBuy && devQuote.tokens > curve.maxBuy) errors.push('Первая покупка превышает лимит на сделку');
   if (size.cells > Limits.MAX_CONTENT_CELLS || size.bits > Limits.MAX_CONTENT_BITS) errors.push('Слишком большие метаданные — уменьшите описание или логотип');
-  if (!factory) errors.push('Фабрика недоступна');
+  if (!factory) errors.push(cfg.activeFactory ? 'Активная фабрика недоступна или закрыта для создания токенов' : 'Создание токенов отключено');
 
   const total = factory ? createTokenValue(factory.state.deployFee, devBuyNano ?? 0n) : 0n;
 
@@ -129,39 +134,46 @@ export function Create() {
   const submit = async () => {
     if (errors.length || !factory || !curve) return;
     setBusy(true);
-    const before = factory.state.nextIndex;
-    const ok = await send(
-      () =>
-        createTx(
-          factory.address,
-          factory.state.deployFee,
-          {
-            creatorFeeBps: fees.creatorFeeBps,
-            devBuy: devBuyNano ?? 0n,
-            minOut: devQuote ? slippageMin(devQuote.tokens, 5) : 0n,
-            curve,
-            content,
+    try {
+      const current = await loadCreationFactory(cfg);
+      if (!current) { setFactory(null); toast('Активная фабрика недоступна или закрыта. Обновите настройки.', 'error'); return; }
+      if (current.state.deployFee !== factory.state.deployFee || current.state.platformFeeBps !== factory.state.platformFeeBps) {
+        setFactory(current); toast('Комиссии фабрики изменились. Проверьте их и повторите создание.', 'info'); return;
+      }
+      const before = current.state.nextIndex;
+      const ok = await send(
+        () =>
+          createTx(
+            factory.address,
+            factory.state.deployFee,
+            {
+              creatorFeeBps: fees.creatorFeeBps,
+              devBuy: devBuyNano ?? 0n,
+              minOut: devQuote ? slippageMin(devQuote.tokens, 5) : 0n,
+              curve,
+              content,
+            },
+            cfg.isTestnet,
+          ),
+        {
+          watch: factory.address,
+          pending: 'Токен создаётся…',
+          done: 'Токен создан!',
+          onConfirmed: async () => {
+            const [f] = (await loadFactories({ ...cfg, factories: [factory.address] })) ?? [];
+            if (!f) return;
+            const candidates: Address[] = [];
+            for (let i = f.state.nextIndex - 1n; i >= before; i--) candidates.push(tokenAddress(f.address, i, f.state.tokenCode));
+            await new Promise((r) => setTimeout(r, 4000)); // let the token's own transaction land
+            const ts = await loadTokens(cfg, candidates, 0);
+            const mine = ts.find((t) => me && t.state.creator.equals(Address.parse(me))) ?? ts[0];
+            if (mine) navigate(`/t/${fmtAddress(mine.address, cfg.isTestnet)}`);
           },
-          cfg.isTestnet,
-        ),
-      {
-        watch: factory.address,
-        pending: 'Токен создаётся…',
-        done: 'Токен создан!',
-        onConfirmed: async () => {
-          const [f] = (await loadFactories({ ...cfg, factories: [factory.address] })) ?? [];
-          if (!f) return;
-          const candidates: Address[] = [];
-          for (let i = f.state.nextIndex - 1n; i >= before; i--) candidates.push(tokenAddress(f.address, i, f.state.tokenCode));
-          await new Promise((r) => setTimeout(r, 4000)); // let the token's own transaction land
-          const ts = await loadTokens(cfg, candidates, 0);
-          const mine = ts.find((t) => me && t.state.creator.equals(Address.parse(me))) ?? ts[0];
-          if (mine) navigate(`/t/${fmtAddress(mine.address, cfg.isTestnet)}`);
         },
-      },
-    );
-    setBusy(false);
-    if (!ok) return;
+      );
+      if (!ok) return;
+    } catch (e) { toast(e instanceof Error ? e.message : String(e), 'error'); }
+    finally { setBusy(false); }
   };
 
   if (readOnly) {
@@ -179,6 +191,11 @@ export function Create() {
         <h1>Новый токен</h1>
         <WalletButton />
       </header>
+      {!loadingFactory && !factory && <div className="empty" role="status">
+        <b>{cfg.activeFactory ? 'Создание токенов временно недоступно' : 'Создание новых токенов приостановлено'}</b>
+        <p>Существующие токены остаются доступны для покупки, продажи и перевода.</p>
+        <Link to="/">Открыть каталог</Link>
+      </div>}
 
       <section className="card">
         <div className="logo-row">

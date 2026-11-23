@@ -265,19 +265,43 @@ PROGRAM{
     64 LDU
     LDREF
     LDREF
+    DUP
+    SBITS
+    IF:<{
+      1 LDU
+    }>ELSE<{
+      1 PUSHINT
+      SWAP
+    }>
+    DUP
+    SBITS
+    IF:<{
+      LDMSGADDR
+    }>ELSE<{
+      0 PUSHINT
+      NEWC
+      2 STU
+      ENDC
+      CTOS
+      SWAP
+    }>
     ENDS
   }>
   save_data PROCINLINE:<{
     NEWC
-    s0 s6 XCHG2
+    s0 s8 XCHG2
     STSLICER
-    s0 s4 XCHG2
+    s0 s6 XCHG2
     STVARUINT16
-    s1 s2 XCHG
+    s1 s4 XCHG
     16 STU
+    s1 s2 XCHG
     64 STU
     STREF
     STREF
+    1 STU
+    SWAP
+    STSLICER
     ENDC
     c4 POP
   }>
@@ -344,21 +368,23 @@ PROGRAM{
     SWAP
     ~load_op_and_query_id INLINECALLDICT
     load_data INLINECALLDICT
-    s7 PUSH
+    s9 PUSH
     209594929 PUSHINT
     EQUAL
     IFJMP:<{
-      s7 POP
-      s8 PUSH
+      s9 POP
+      DUP
+      86 THROWIFNOT
+      s10 PUSH
       check_same_workchain INLINECALLDICT
-      s0 s7 XCHG
+      s0 s9 XCHG
       16 LDU
       LDVARUINT16
       LDVARUINT16
       LDREF
       LDREF
       ENDS
-      s7 PUSH
+      s9 PUSH
       100000000 PUSHINT
       ADD
       100000000 PUSHINT
@@ -374,7 +400,8 @@ PROGRAM{
         ADD
         ADD
       }>
-      s14 s(-1) PUXC
+      16 s() PUSH
+      SWAP
       GEQ
       85 THROWIFNOT
       s4 PUSH
@@ -393,14 +420,19 @@ PROGRAM{
       120000 PUSHINT
       LEQ
       84 THROWIFNOT
-      s5 PUSH
+      s7 PUSH
       INC
-      s9 s8 s(-1) XCPUXC
-      s8 s13 s(-1) PU2XC
-      s14 PUSH
+      s10 PUSH
+      s4 s12 XCHG
+      s3 s10 XCPU
+      s9 s3 s(-1) PUXC2
+      s9 PUSH
+      s0 s2 XCHG
+      s1 18 s() XCHG
+      s0 17 s() XCHG
       save_data INLINECALLDICT
       MYADDR
-      s0 s5 s11 XCPUXC
+      s0 s5 s4 XCPUXC
       calculate_token_state_init INLINECALLDICT
       DUP
       calculate_address_by_state_init INLINECALLDICT
@@ -433,17 +465,15 @@ PROGRAM{
       store_query_id INLINECALLDICT
       s0 s8 XCHG2
       STSLICER
-      s1 s4 XCHG
+      s1 s2 XCHG
       16 STU
-      s1 s3 XCHG
       16 STU
-      s0 s5 XCHG2
+      ROT
       STVARUINT16
       SWAP
       STVARUINT16
       s1 s2 XCHG
       STREF
-      s1 s2 XCHG
       STREF
       STREF
       ENDC
@@ -460,33 +490,74 @@ PROGRAM{
       144 PUSHINT
       SENDRAWMSG
     }>
-    s6 POP
-    s6 PUSH
+    s9 PUSH
     1358160295 PUSHINT
     EQUAL
-    s7 PUSH
+    s10 PUSH
     3547469196 PUSHINT
     EQUAL
     OR
-    s7 PUSH
+    s10 PUSH
     3576854235 PUSHINT
     EQUAL
     OR
     IFJMP:<{
-      11 BLKDROP
+      14 BLKDROP
     }>
-    s8 s4 XCPU
+    s11 s7 PUSH2
     SDEQ
     73 THROWIFNOT
-    s5 PUSH
+    s9 PUSH
+    1380275273 PUSHINT
+    EQUAL
+    IFJMP:<{
+      DROP
+      s8 POP
+      s0 s7 XCHG
+      86 THROWIFNOT
+      s0 s7 XCHG
+      LDMSGADDR
+      ENDS
+      DUP
+      check_same_workchain INLINECALLDICT
+      MYADDR
+      s1 s(-1) PUXC
+      SDEQ
+      NOT
+      83 THROWIFNOT
+      s4 s6 XCHG
+      s3 s5 XCHG
+      s4 s3 s0 XCHG3
+      s7 s7 s0 XCHG3
+      0 PUSHINT
+      SWAP
+      save_data INLINECALLDICT
+      2SWAP
+      SUB
+      0 PUSHINT
+      RAWRESERVE
+      0 PUSHINT
+      NEWC
+      3576854235 PUSHINT
+      store_op INLINECALLDICT
+      ROT
+      store_query_id INLINECALLDICT
+      ENDC
+      130 PUSHINT
+      send_simple INLINECALLDICT
+    }>
+    s8 POP
+    s10 POP
+    s7 PUSH
     982194641 PUSHINT
     EQUAL
     IFJMP:<{
+      s3 POP
+      s3 POP
       s5 POP
-      2DROP
-      s5 POP
-      s5 POP
-      SWAP
+      s7 POP
+      s7 POP
+      s0 s3 XCHG
       LDVARUINT16
       16 LDU
       ENDS
@@ -498,29 +569,32 @@ PROGRAM{
       100000000000 PUSHINT
       LEQ
       83 THROWIFNOT
-      s3 s3 XCHG2
-      s0 s4 XCHG
-      s0 s5 XCHG
+      s4 s7 XCHG
+      s6 s5 XCHG2
+      s3 s4 XCHG
+      ROT
       save_data INLINECALLDICT
     }>
-    s5 PUSH
+    s7 PUSH
     1694626644 PUSHINT
     EQUAL
     IFJMP:<{
-      s3 POP
-      s4 POP
+      s5 POP
       s6 POP
-      s6 POP
-      s0 s2 XCHG
+      s8 POP
+      s8 POP
+      s0 s4 XCHG
       LDMSGADDR
       ENDS
       DUP
       check_same_workchain INLINECALLDICT
-      s5 s3 s5 XCHG3
+      s0 s7 XCHG
+      s4 s6 XCHG
+      s1 s5 s5 XCHG3
       save_data INLINECALLDICT
     }>
-    s3 s4 XCHG
-    4 BLKDROP
+    s5 s6 XCHG
+    6 BLKDROP
     s3 POP
     1189949076 PUSHINT
     EQUAL
@@ -560,8 +634,8 @@ PROGRAM{
   }>
   get_token_address PROC:<{
     load_data INLINECALLDICT
-    s1 s5 XCHG
-    5 BLKDROP
+    s3 s7 XCHG
+    7 BLKDROP
     MYADDR
     -ROT
     calculate_token_state_init INLINECALLDICT
