@@ -7,6 +7,7 @@ import { Token } from '../wrappers/Token';
 import { JettonWallet } from '../wrappers/JettonWallet';
 import {
     buildOnchainMetadata,
+    buyBody,
     CurveParams,
     createTokenValue,
     designCurve,
@@ -92,6 +93,26 @@ describe('Floe memepad', () => {
     const tradeEvents = (res: any) =>
         res.externals.map((e: any) => parseTradeEvent(e.body)).filter((x: any) => x !== null);
 
+    async function expectMintNotification(res: any, token: SandboxContract<Token>, recipient: Address, amount: bigint, queryId = 0n) {
+        const wallet = await walletOf(token, recipient);
+        // TonAPI's JettonMintFromMaster pattern needs master -> jetton wallet -> owner notify.
+        expect(res.transactions).toHaveTransaction({
+            from: token.address, to: wallet.address, op: Op.internalTransfer, success: true,
+            body: beginCell().storeUint(Op.internalTransfer, 32).storeUint(queryId, 64)
+                .storeCoins(amount).storeAddress(token.address).storeAddress(recipient)
+                .storeCoins(1n).storeBit(false).endCell(),
+        });
+        expect(res.transactions).toHaveTransaction({
+            from: wallet.address, to: recipient, op: Op.transferNotification, value: 1n,
+            body: beginCell().storeUint(Op.transferNotification, 32).storeUint(queryId, 64)
+                .storeCoins(amount).storeAddress(token.address).storeBit(false).endCell(),
+        });
+        expect(res.transactions).toHaveTransaction({
+            from: wallet.address, to: recipient, op: Op.excesses,
+            body: beginCell().storeUint(Op.excesses, 32).storeUint(queryId, 64).endCell(),
+        });
+    }
+
     it('creates a token with immutable params and no admin', async () => {
         const { res, token } = await createToken();
         expect(res.transactions).toHaveTransaction({ from: factory.address, to: token.address, deploy: true, success: true });
@@ -99,6 +120,8 @@ describe('Floe memepad', () => {
         expect(jd.totalSupply).toBe(0n);
         expect(jd.admin).toBeNull();
         expect(jd.mintable).toBe(true);
+        expect(res.transactions).not.toHaveTransaction({ from: token.address, op: Op.internalTransfer });
+        expect(res.transactions).not.toHaveTransaction({ to: creator.address, op: Op.transferNotification });
         const m = parseMetadata(jd.content);
         expect(m.name).toBe('Penguin Coin');
         expect(m.symbol).toBe('PENG');
@@ -144,6 +167,48 @@ describe('Floe memepad', () => {
         expect((await token.getJettonData()).totalSupply).toBe(q.tokens);
     });
 
+    it('buy produces a standard mint notification with matching amount and query id', async () => {
+        const { token } = await createToken();
+        const tonIn = toNano('25');
+        const q = quoteBuy(curve, fees, 0n, tonIn);
+        const queryId = 1795405623302n; // regression: the real TEST purchase had no owner notification
+        const res = await token.sendRaw(alice.getSender(), tonIn + Limits.BUY_GAS, buyBody(q.tokens, queryId));
+        await expectMintNotification(res, token, alice.address, q.tokens, queryId);
+        expect(await (await walletOf(token, alice.address)).getJettonBalance()).toBe(q.tokens);
+        expect((await token.getJettonData()).totalSupply).toBe(q.tokens);
+    });
+
+    it('notifies every purchase into an existing jetton wallet without double crediting', async () => {
+        const { token } = await createToken();
+        const first = await token.sendBuy(alice.getSender(), toNano('10'));
+        const before = (await token.getJettonData()).totalSupply;
+        await expectMintNotification(first, token, alice.address, before);
+        const secondQuote = quoteBuy(curve, fees, before, toNano('5'));
+        const second = await token.sendBuy(alice.getSender(), toNano('5'), secondQuote.tokens);
+        await expectMintNotification(second, token, alice.address, secondQuote.tokens);
+        expect((await token.getJettonData()).totalSupply).toBe(before + secondQuote.tokens);
+        expect(await (await walletOf(token, alice.address)).getJettonBalance()).toBe(before + secondQuote.tokens);
+    });
+
+    it('creator first buy at token creation uses the same standard mint notification', async () => {
+        const devBuy = toNano('10');
+        const q = quoteBuy(curve, fees, 0n, devBuy);
+        const { token, res } = await createToken(devBuy, q.tokens);
+        await expectMintNotification(res, token, creator.address, q.tokens);
+        expect(await (await walletOf(token, creator.address)).getJettonBalance()).toBe(q.tokens);
+    });
+
+    it('rejected creator first buy does not produce a mint notification or a balance', async () => {
+        const devBuy = toNano('10');
+        const q = quoteBuy(curve, fees, 0n, devBuy);
+        const { token, res } = await createToken(devBuy, q.tokens + 1n);
+        expect(res.transactions).not.toHaveTransaction({ from: token.address, op: Op.internalTransfer });
+        expect(res.transactions).not.toHaveTransaction({ to: creator.address, op: Op.transferNotification });
+        expect(res.transactions).toHaveTransaction({ from: token.address, to: creator.address, op: Op.refund });
+        expect((await token.getJettonData()).totalSupply).toBe(0n);
+        expect(await (await walletOf(token, creator.address)).getJettonBalance()).toBe(0n);
+    });
+
     it('buy matches local and on-chain quotes, returns excess gas, emits trade log', async () => {
         const { token } = await createToken();
         const tonIn = toNano('25');
@@ -180,6 +245,8 @@ describe('Floe memepad', () => {
         expect(res.transactions).toHaveTransaction({ from: token.address, to: alice.address, op: Op.refund });
         expect(before - (await alice.getBalance())).toBeLessThan(toNano('0.02'));
         expect((await token.getJettonData()).totalSupply).toBe(0n);
+        expect(res.transactions).not.toHaveTransaction({ from: token.address, op: Op.internalTransfer });
+        expect(res.transactions).not.toHaveTransaction({ to: alice.address, op: Op.transferNotification });
     });
 
     it('respects max buy per tx and max supply', async () => {

@@ -5,6 +5,7 @@ import { Address, beginCell, Builder, Cell, Dictionary, Slice } from '@ton/core'
 export const Op = {
     transfer: 0xf8a7ea5,
     internalTransfer: 0x178d4519,
+    transferNotification: 0x7362d09c,
     excesses: 0xd53276db,
     burn: 0x595f07bc,
     burnNotification: 0x7bdd97de,
