@@ -89,7 +89,7 @@ npx blueprint run deployFactory --testnet --tonconnect
 npx blueprint run setFactoryConfig --testnet --tonconnect
 ```
 
-Выведенный адрес фабрики впишите в `app/public/floe.config.json → factories`.
+Выведенный адрес фабрики впишите в `app/public/floe.config.json → networks.testnet.factories`.
 
 ### 2. Настроить мини-апп
 
@@ -100,10 +100,10 @@ npx blueprint run setFactoryConfig --testnet --tonconnect
 | Поле | Значение |
 |---|---|
 | `network` | `testnet` / `mainnet` |
-| `factories` | адреса фабрик (новые версии контрактов = новая фабрика, старые токены продолжают работать) |
+| `networks.testnet.factories`, `networks.mainnet.factories` | отдельные адреса фабрик для каждой сети (новые версии контрактов = новая фабрика, старые токены продолжают работать) |
 | `awMode` | `full` — всё внутри кошелька; `readonly` — внутри AW только каталог и графики, торговля в веб-версии (см. `MODERATION.md`) |
-| `toncenterApiKey` | необязательно; без ключа toncenter даёт ~1 запрос/с, с бесплатным ключом — 10/с |
-| `toncenterUrl` | необязательно; свой toncenter-v3-совместимый endpoint |
+| `networks.<сеть>.toncenterApiKey` | необязательно; без ключа toncenter даёт ~1 запрос/с, с бесплатным ключом — 10/с |
+| `networks.<сеть>.toncenterUrl` | необязательно; свой toncenter-v3-совместимый endpoint |
 | `hiddenTokens` | адреса токенов, скрытых модерацией оператора |
 | `blockedWords` | стоп-слова: токены с ними в названии/описании не показываются |
 | `supportUrl`, `sourceUrl` | ссылки на странице «Инфо» |
@@ -128,7 +128,7 @@ npm run app:dev
 npm run demo
 ```
 
-После этого в `floe.config.json` пропишите выведенный адрес фабрики и `"toncenterUrl": "http://127.0.0.1:8787/api/v3"`.
+После этого в `floe.config.json → networks.testnet` пропишите выведенный адрес в `factories` и `"toncenterUrl": "http://127.0.0.1:8787/api/v3"`. Верните общие настройки сайта в скрытом экране, если ранее сохраняли локальные адреса.
 
 ### 4. GitHub Pages
 
